@@ -1,0 +1,9 @@
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import User
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    ordering = ['email']   
+    list_display = ['email', 'phone_number', 'is_staff', 'is_active']
+    search_fields = ['email', 'phone_number']
