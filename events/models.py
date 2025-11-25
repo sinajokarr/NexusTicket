@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from django.core.validators import MinValueValidator
 
 class Category(models.Model):
     name = models.CharField(_('Name'), max_length=100)
@@ -55,3 +56,38 @@ class Event(models.Model):
 
     def __str__(self):
         return self.title
+    
+    
+class TicketClass(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='ticket_classes'
+    )
+    title = models.CharField(_('Title'), max_length=50) 
+    description = models.CharField(_('Description'), max_length=255, blank=True)
+    price = models.DecimalField(
+        _('Price'), 
+        max_digits=12, 
+        decimal_places=0, 
+        validators=[MinValueValidator(0)])
+    capacity = models.PositiveIntegerField(_('Capacity')) 
+    sold = models.PositiveIntegerField(_('Sold Count'), default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Ticket Class')
+        verbose_name_plural = _('Ticket Classes')
+
+    def __str__(self):
+        return f"{self.event.title} - {self.title}"
+
+    
+    @property
+    def is_sold_out(self):
+        return self.sold >= self.capacity
+
+    @property
+    def remaining_capacity(self):
+        return self.capacity - self.sold

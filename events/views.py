@@ -7,7 +7,7 @@ from .serializers import CategorySerializer,EventSerializer
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset=Category.objects.all()
     serializer_class=CategorySerializer
-    Permission_classes =[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes =[permissions.IsAuthenticatedOrReadOnly]
     
 class EventViewSet(viewsets.ModelViewSet):
     queryset=Event.objects.all()
