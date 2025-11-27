@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Event
+from .models import Category, Event,TicketClass
 from accounts.models import User
 
 
@@ -20,6 +20,11 @@ class EventSerializer(serializers.ModelSerializer):
     organizer = OrganizerSerializer(read_only=True)
     class  Meta:
         model = Event
-        fields = ['id','title', 'slug', 'description', 'cover_image', 'date', 'location', 'address', 'organizer', 'categories','is_active','created_at']
+        fields = ['id','title', 'slug', 'ticket_classes','description', 'cover_image', 'date', 'location', 'address', 'organizer', 'categories','is_active','created_at']
         read_only_fields = ['organizer', 'is_active', 'created_at']
         
+        
+class TicketClassSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketClass
+        fields = ['id', 'title', 'price', 'capacity', 'sold', 'is_sold_out', 'remaining_capacity']
