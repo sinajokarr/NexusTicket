@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'accounts',
     'events',
     'django_filters',
+    'orders',
 ]
 
 MIDDLEWARE = [
