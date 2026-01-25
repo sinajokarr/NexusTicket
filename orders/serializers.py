@@ -6,6 +6,7 @@ from .models import Order, OrderItem, Coupon
 from events.models import TicketClass
 
 
+
 class OrderItemSerializer(serializers.ModelSerializer):
     ticket_title = serializers.CharField(source='ticket_class.title', read_only=True)
 

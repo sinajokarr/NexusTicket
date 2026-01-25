@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'django_filters',
     'orders',
     'corsheaders',
+    'drf_yasg',
+    'payments' ,
 ]
 
 MIDDLEWARE = [
@@ -159,3 +161,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'accounts.User'
 CORS_ALLOW_ALL_ORIGINS = True
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
