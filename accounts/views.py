@@ -2,6 +2,7 @@ from rest_framework import generics
 from .models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.serializers import ModelSerializer
+from .serializers import UserSerializer  
 
 class UserSerializer(ModelSerializer):
     class Meta:
