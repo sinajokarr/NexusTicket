@@ -5,7 +5,7 @@
 
 ***
 
-[![Developer Role: Backend](https://img.shields.io/badge/Architecture-RESTful%20API-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/sinajokarr)
+[![Developer Role: Backend](https://img.shields.io/badge/Developer%20Role-Backend%20Architect-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/sinajokarr)
 [![Framework: Django](https://img.shields.io/badge/Framework-Django%205.x-092E20?style=for-the-badge&logo=django&logoColor=white)](https://github.com/sinajokarr)
 [![Database: PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2014%2B-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/sinajokarr)
 [![Security: JWT](https://img.shields.io/badge/Security-JWT%20%7C%20RBAC-007ACC?style=for-the-badge&logo=jsonwebtokens&logoColor=white)](https://github.com/sinajokarr)
@@ -42,11 +42,11 @@ I champion a **"Performance-First"** approach, ensuring that complex relational 
 | :--- | :--- |
 | **Core Frameworks** | `Django 5.0`, `Django REST Framework (DRF)` |
 | **Authentication** | `Simple JWT` (Stateless Auth), `Custom User Models` |
-| **Database Logic** | `PostgreSQL` (Composite Indexes, JSONB), `ORM Optimization` |
-| **Image Handling** | `Pillow` (Cloud-ready storage paths) |
+| **Database Logic** | `PostgreSQL` (Composite Indexes), `ORM Optimization` |
+| **Validation** | `Django Core Validators` (Min/Max Pricing & Capacity) |
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Python%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/Django%205.x-092E20?style=for-the-badge&logo=django&logoColor=white" alt="Django">
   <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
 </p>
@@ -55,63 +55,99 @@ I champion a **"Performance-First"** approach, ensuring that complex relational 
 
 ## 💻 Technical Highlights: Architectural Excellence
 
-### 🎫 1. Advanced Ticketing Logic
-* **Challenge:** Managing real-time inventory and financial accuracy for diverse ticket classes.
-* **Solution:** Implemented **DecimalField** for zero-rounding-error financial data and **Calculated Properties** (`@property`) to determine `is_sold_out` and `remaining_capacity` without redundant database writes.
+### 🔐 1. Secure Identity Management
+NexusTicket utilizes a custom `BaseUserManager` to handle email-based authentication and secure password hashing via `set_password`.
 
-### 🔍 2. Extreme Query Optimization
-* **Challenge:** High latency when filtering events by date, location, and activity status.
-* **Solution:** Designed **Composite Indexes** (`models.Index`) specifically for high-traffic query paths. Utilized `select_related` and `prefetch_related` to eliminate N+1 query problems in nested Serializers.
+```python
+# Example from accounts/models.py
+def create_user(self, email, password=None, **extra_fields):
+    if not email:
+        raise ValueError(_('The Email field must be set'))
+    email = self.normalize_email(email)
+    user = self.model(email=email, **extra_fields)
+    user.set_password(password)
+    user.save(using=self._db)
+    return user
 
-### 🔐 3. Security & Global Readiness
-* **Identity:** Transitioned to an **Email-based Custom User Model** for improved security and UX.
-* **SEO & i18n:** Implemented **Unicode SlugFields** to support multi-language SEO-friendly URLs and utilized `gettext_lazy` for localized API responses.
+```
+
+### 🎫 2. Advanced Serialization & Logic
+
+To ensure password security, the `UserSerializer` employs `write_only` constraints and leverages the custom manager for object creation.
+
+```python
+# Example from accounts/serializers.py
+class UserSerializer(ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('email', 'password')
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
+        return user
+
+```
+
+### 🔍 3. Performance & Data Integrity
+
+* **Inventory Management:** Uses `@property` decorators for real-time `is_sold_out` checks without redundant DB writes.
+* **Concurrency Safety:** Employs `models.Index` on slug and date fields for optimized search results.
 
 ---
 
-## 🚀 Installation & Deployment Guide
+## 🚀 Installation & Local Setup
 
-Follow these steps to deploy and run the NexusTicket engine on your local environment.
+Execute the following commands in your terminal to set up a local development environment.
 
-### 1. Clone & Environment Setup
+### 1. Repository Initialization
+
 ```bash
 git clone [https://github.com/sinajokarr/NexusTicket.git](https://github.com/sinajokarr/NexusTicket.git)
 cd NexusTicket
 
-# Initialize Virtual Environment
+```
+
+### 2. Environment Virtualization
+
+```bash
+# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Mac/Linux
+# On Windows use: venv\Scripts\activate
 
 ```
 
-### 2. Dependency Management
-
-Install the production-ready packaging requirements.
+### 3. Dependency Packaging
 
 ```bash
+# Upgrade pip and install core requirements
 pip install --upgrade pip
 pip install -r requirements.txt
 
 ```
 
-### 3. Environment Variables
+### 4. Configuration (.env)
 
-Create a `.env` file in the project root to store sensitive configuration:
+Create a `.env` file in the root directory to manage sensitive credentials:
 
 ```env
 DEBUG=True
-SECRET_KEY=your_secure_secret_key
+SECRET_KEY=generate_your_secure_key
 DB_NAME=nexusticket_db
 DB_USER=postgres
-DB_PASS=password
+DB_PASS=your_password
 DB_HOST=localhost
 DB_PORT=5432
 
 ```
 
-### 4. Database Initialization
+### 5. Schema Deployment
 
-Execute migrations to build the optimized schema.
+Build and apply the optimized database schema.
 
 ```bash
 python manage.py makemigrations
@@ -120,14 +156,14 @@ python manage.py createsuperuser
 
 ```
 
-### 5. Running the API
+### 6. Launch Server
 
 ```bash
 python manage.py runserver
 
 ```
 
-The API will be available at `http://127.0.0.1:8000/`.
+API Root: `http://127.0.0.1:8000/`
 
 ---
 
@@ -145,7 +181,7 @@ The API will be available at `http://127.0.0.1:8000/`.
 
 ---
 
-### **Interested in scaling your event infrastructure?**
+### **Ready to scale your ticketing infrastructure?**
 
 **I am available for Backend Architecture discussions and high-impact career collaborations.**
 
@@ -154,4 +190,3 @@ The API will be available at `http://127.0.0.1:8000/`.
 ---
 
 </div>
-
