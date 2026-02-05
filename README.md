@@ -1,14 +1,16 @@
 
 <div align="center">
 
-# 🎫 NexusTicket: High-Performance Event Ticketing API Engine ✨
+# 🎫 NexusTicket: Enterprise-Grade Event Management Engine
 
 ***
 
-[![Developer Role: Backend](https://img.shields.io/badge/Developer%20Role-Backend%20Architect-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/sinajokarr)
-[![Framework: Django](https://img.shields.io/badge/Framework-Django%205.x-092E20?style=for-the-badge&logo=django&logoColor=white)](https://github.com/sinajokarr)
-[![Database: PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2014%2B-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/sinajokarr)
-[![Security: JWT](https://img.shields.io/badge/Security-JWT%20%7C%20RBAC-007ACC?style=for-the-badge&logo=jsonwebtokens&logoColor=white)](https://github.com/sinajokarr)
+[![Backend](https://img.shields.io/badge/Backend-Django%205.0%20%7C%20DRF-092E20?style=for-the-badge&logo=django&logoColor=white)](https://github.com/sinajokarr)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL%2014%2B-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/sinajokarr)
+[![Security](https://img.shields.io/badge/Security-JWT%20%7C%20RBAC-007ACC?style=for-the-badge&logo=jsonwebtokens&logoColor=white)](https://github.com/sinajokarr)
+[![Architecture](https://img.shields.io/badge/Arch-Clean%20%26%20Scalable-success?style=for-the-badge)](https://github.com/sinajokarr)
+
+**Designed for High-Concurrency Ticketing and Optimized Data Retrieval.**
 
 ***
 
@@ -16,138 +18,98 @@
 
 <br>
 
-## 🎯 Project Overview: Scalable & Secure Event Management
-
-**NexusTicket** is a production-grade backend ecosystem engineered for high-concurrency event ticketing. The architecture prioritizes **data integrity, advanced security protocols, and extreme query optimization**. By leveraging Django 5.x and PostgreSQL features like composite indexing and strict schema validation, NexusTicket provides a seamless experience for organizers and ticket buyers alike.
-
-I champion a **"Performance-First"** approach, ensuring that complex relational data—such as multiple ticket classes and artist management—is delivered via lightning-fast API responses.
+## 🎯 Executive Summary
+**NexusTicket** is a robust backend solution for modern event ticketing platforms. Unlike generic systems, it is architected with a **Performance-First** mindset, utilizing advanced PostgreSQL indexing and custom Django Managers to ensure data integrity and sub-second query execution even under heavy load.
 
 <br>
 
-### 📬 Professional Links & Contact
+## 🛠️ The Architectural Core (Technical Stack)
 
-| Platform | Link |
-| :--- | :--- |
-| 🔗 **LinkedIn** | [Sina Jokar - LinkedIn](https://www.linkedin.com/in/sinajokar/) 💼 |
-| 📁 **GitHub Profile** | [Sina Jokar GitHub](https://github.com/sinajokarr) |
-| 📧 **Contact** | [cnajokar11@yahoo.com](mailto:cnajokar11@yahoo.com) |
-
----
-
-## 🛠️ The Production Toolbox: Technical Specifications
-
-### 🌐 Backend Ecosystem
-
-| Category | Skills |
-| :--- | :--- |
-| **Core Frameworks** | `Django 5.0`, `Django REST Framework (DRF)` |
-| **Authentication** | `Simple JWT` (Stateless Auth), `Custom User Models` |
-| **Database Logic** | `PostgreSQL` (Composite Indexes), `ORM Optimization` |
-| **Validation** | `Django Core Validators` (Min/Max Pricing & Capacity) |
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Django%205.x-092E20?style=for-the-badge&logo=django&logoColor=white" alt="Django">
-  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-</p>
+| Layer | Technology | Key Implementation |
+| :--- | :--- | :--- |
+| **Framework** | `Django 5.x` | Custom User Models & Signal-based triggers. |
+| **API Layer** | `DRF` | Hyperlinked APIs & Custom Permission Classes. |
+| **Database** | `PostgreSQL` | Composite Indexes & Decimal precision for finance. |
+| **Auth** | `Simple JWT` | Stateless security with refresh token rotation. |
 
 ---
 
-## 💻 Technical Highlights: Architectural Excellence
+## 💻 Technical Deep Dive: Engineered for Scale
 
-### 🔐 1. Secure Identity Management
-NexusTicket utilizes a custom `BaseUserManager` to handle email-based authentication and secure password hashing via `set_password`.
+### 🔐 1. Custom Identity Management
+NexusTicket eliminates insecure standard username fields. We implement a custom `BaseUserManager` to enforce email-based identity and atomic user creation.
 
 ```python
-# Example from accounts/models.py
+# From accounts/models.py
 def create_user(self, email, password=None, **extra_fields):
     if not email:
-        raise ValueError(_('The Email field must be set'))
+        raise ValueError('The Email field must be set')
     email = self.normalize_email(email)
     user = self.model(email=email, **extra_fields)
-    user.set_password(password)
+    user.set_password(password) # Enforces PBKDF2 Hashing
     user.save(using=self._db)
     return user
 
 ```
 
-### 🎫 2. Advanced Serialization & Logic
+### 🎫 2. Optimized Ticketing Logic
 
-To ensure password security, the `UserSerializer` employs `write_only` constraints and leverages the custom manager for object creation.
+* **Stock Integrity:** Uses `@property` methods to calculate `is_sold_out` and `remaining_capacity` dynamically, ensuring no overselling occurs.
+* **Financial Precision:** Implements `DecimalField` for price management to eliminate floating-point arithmetic errors common in currency transactions.
 
-```python
-# Example from accounts/serializers.py
-class UserSerializer(ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('email', 'password')
-        extra_kwargs = {'password': {'write_only': True}}
+### 🔍 3. Advanced Query Optimization
 
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        return user
+Strategic database indexing is at the heart of the project.
 
-```
-
-### 🔍 3. Performance & Data Integrity
-
-* **Inventory Management:** Uses `@property` decorators for real-time `is_sold_out` checks without redundant DB writes.
-* **Concurrency Safety:** Employs `models.Index` on slug and date fields for optimized search results.
+* **Composite Indexes:** Optimized for filtering `is_active` events sorted by `date`.
+* **Unicode Slugs:** Fully supports multilingual (Persian/English) SEO-friendly URLs.
 
 ---
 
-## 🚀 Installation & Local Setup
+## 🚀 Deployment & Local Installation
 
-Execute the following commands in your terminal to set up a local development environment.
+Follow these steps to initialize the production-ready environment.
 
-### 1. Repository Initialization
+### 1. Initialize Environment
 
 ```bash
 git clone [https://github.com/sinajokarr/NexusTicket.git](https://github.com/sinajokarr/NexusTicket.git)
 cd NexusTicket
 
-```
-
-### 2. Environment Virtualization
-
-```bash
-# Create and activate virtual environment
+# Virtual Environment Setup
 python -m venv venv
-source venv/bin/activate  # Mac/Linux
-# On Windows use: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 ```
 
-### 3. Dependency Packaging
+### 2. Dependency Management
+
+Install the core engine and its performance-critical extensions.
 
 ```bash
-# Upgrade pip and install core requirements
 pip install --upgrade pip
 pip install -r requirements.txt
 
 ```
 
-### 4. Configuration (.env)
+### 3. Environment Configuration (`.env`)
 
-Create a `.env` file in the root directory to manage sensitive credentials:
+Create a `.env` file in the root directory:
 
 ```env
-DEBUG=True
-SECRET_KEY=generate_your_secure_key
+DEBUG=False
+SECRET_KEY=your_production_key_here
 DB_NAME=nexusticket_db
 DB_USER=postgres
-DB_PASS=your_password
+DB_PASS=your_secure_password
 DB_HOST=localhost
 DB_PORT=5432
 
 ```
 
-### 5. Schema Deployment
+### 4. Database Schema Deployment
 
-Build and apply the optimized database schema.
+Execute migrations to build the optimized indexing structure.
 
 ```bash
 python manage.py makemigrations
@@ -156,37 +118,31 @@ python manage.py createsuperuser
 
 ```
 
-### 6. Launch Server
+### 5. Launch Service
 
 ```bash
 python manage.py runserver
 
 ```
 
-API Root: `http://127.0.0.1:8000/`
+---
+
+## 📈 Database Schema Overview
+
+* **One-to-Many:** User → Organized Events (Protected Deletion).
+* **Many-to-Many:** Events ↔ Artists, Events ↔ Categories.
+* **Integrity:** `TicketClass` is strictly linked to `Event` via `CASCADE` for logical cleanup.
 
 ---
 
-## 📊 Activity & Growth
+## 📬 Contact & Collaboration
+
+| Platform | Link |
+| --- | --- |
+| 💼 **LinkedIn** | [Sina Jokar](https://www.linkedin.com/in/sinajokar/) |
+| 📧 **Email** | [cnajokar11@yahoo.com](mailto:cnajokar11@yahoo.com) |
+| 📁 **Portfolio** | [More Projects](https://github.com/sinajokarr) |
 
 <div align="center">
 
-</div>
 
----
-
-## 🙏 Call to Action
-
-<div align="center">
-
----
-
-### **Ready to scale your ticketing infrastructure?**
-
-**I am available for Backend Architecture discussions and high-impact career collaborations.**
-
-**[Let's Connect on LinkedIn](https://www.linkedin.com/in/sinajokar/)**
-
----
-
-</div>
