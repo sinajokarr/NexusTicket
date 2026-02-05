@@ -67,6 +67,18 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['-date']
+        verbose_name = _('Event')
+        verbose_name_plural = _('Events')
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['date', 'is_active']), 
+            models.Index(fields=['location']),
+        ]
+
+    def __str__(self):
+        return self.title
 
 class TicketClass(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='ticket_classes')
