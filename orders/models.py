@@ -10,8 +10,8 @@ class Coupon(models.Model):
     )
 
     code = models.CharField(_('Coupon Code'), max_length=50, unique=True)
-    type = models.CharField(_('Type'), max_length=15, choices=TYPE_CHOICES, default='percentage')
-    value = models.DecimalField(_('Value'), max_digits=12, decimal_places=0)
+    discount_type = models.CharField(_('Discount Type'), max_length=15, choices=TYPE_CHOICES, default='percentage')
+    value = models.DecimalField(_('Value'), max_digits=12, decimal_places=2)
     
     max_discount_limit = models.DecimalField(_('Max Limit'), max_digits=12, decimal_places=0, null=True, blank=True)
     total_capacity = models.PositiveIntegerField(_('Total Capacity'), default=100)   
@@ -19,7 +19,7 @@ class Coupon(models.Model):
     
     valid_ticket_class = models.ForeignKey(
         'events.TicketClass', 
-        on_delete=models.CASCADE, 
+        on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
         related_name='coupons'

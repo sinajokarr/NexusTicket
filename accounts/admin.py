@@ -24,7 +24,6 @@ class CustomUserAdmin(UserAdmin):
     list_display = ['email', 'is_staff', 'is_active']
     search_fields = ['email']
     list_filter = ['is_staff', 'is_active']
-
     add_form = CustomUserCreationForm
 
     fieldsets = (
