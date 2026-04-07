@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from orders.models import Order
+from django.db import transaction
+from orders.models import Order 
 from .models import Category, Event, TicketClass, Artist, Review 
 from accounts.models import User
 
@@ -64,6 +65,7 @@ class EventSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['organizer', 'is_active', 'created_at', 'slug']
 
+    @transaction.atomic 
     def create(self, validated_data):
         ticket_classes_data = validated_data.pop('ticket_classes', [])        
         event = Event.objects.create(**validated_data)
@@ -73,6 +75,7 @@ class EventSerializer(serializers.ModelSerializer):
             
         return event  
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         ticket_classes_data = validated_data.pop('ticket_classes', None)
         instance = super().update(instance, validated_data)
@@ -81,10 +84,11 @@ class EventSerializer(serializers.ModelSerializer):
             for ticket_data in ticket_classes_data:
                 ticket_id = ticket_data.get('id')
                 if ticket_id:
-                    ticket_item = TicketClass.objects.get(id=ticket_id, event=instance)
-                    for attr, value in ticket_data.items():
-                        setattr(ticket_item, attr, value)
-                    ticket_item.save()
+                    ticket_item = TicketClass.objects.filter(id=ticket_id, event=instance).first()
+                    if ticket_item:
+                        for attr, value in ticket_data.items():
+                            setattr(ticket_item, attr, value)
+                        ticket_item.save()
                 else:
                     TicketClass.objects.create(event=instance, **ticket_data)
         
