@@ -12,7 +12,7 @@ class PaymentRequestView(APIView):
         order_id = request.data.get('order_id')
         order = get_object_or_404(Order, id=order_id, user=request.user, status='pending')
 
-        final_price = order.total_price - order.discount_amount
+        final_price = order.final_payable_amount
 
         payment = Payment.objects.create(
             user=request.user,
@@ -53,19 +53,30 @@ def mock_bank_view(request, authority_id):
 class PaymentVerifyView(APIView):
     def get(self, request, authority_id):
         status_param = request.query_params.get('status')
-        payment = get_object_or_404(Payment, authority_id=authority_id)
+        
+        with transaction.atomic():
+            payment = get_object_or_404(Payment.objects.select_for_update(), authority_id=authority_id)
 
-        if status_param == 'success':
-            with transaction.atomic():
+            if payment.status != 'pending':
+                return HttpResponse("<h1 style='color:orange; text-align:center;'>⚠️ This payment has already been processed.</h1>")
+
+            order = Order.objects.select_for_update().get(id=payment.order.id)
+
+            if status_param == 'success':
+                if order.status != 'pending':
+                    payment.status = 'failed'
+                    payment.save()
+                    return HttpResponse("<h1 style='color:red; text-align:center;'>❌ Order expired. Payment rejected. Please create a new order.</h1>")
+
                 payment.status = 'success'
                 payment.transaction_id = f"TRX-{uuid.uuid4().hex[:8]}"
                 payment.save()
                 
-                payment.order.status = 'paid' 
-                payment.order.save()
+                order.status = 'paid' 
+                order.save()
             
-            return HttpResponse("<h1 style='color:green; text-align:center;'>✅ Payment Successful! Order Completed.</h1>")
-        else:
-            payment.status = 'failed'
-            payment.save()
-            return HttpResponse("<h1 style='color:red; text-align:center;'>❌ Payment Failed. Try again.</h1>")
+                return HttpResponse("<h1 style='color:green; text-align:center;'>✅ Payment Successful! Order Completed.</h1>")
+            else:
+                payment.status = 'failed'
+                payment.save()
+                return HttpResponse("<h1 style='color:red; text-align:center;'>❌ Payment Failed. Try again.</h1>")

@@ -5,15 +5,12 @@ from django.utils import timezone
 from .models import Order, OrderItem, Coupon
 from events.models import TicketClass
 
-
-
 class OrderItemSerializer(serializers.ModelSerializer):
     ticket_title = serializers.CharField(source='ticket_class.title', read_only=True)
 
     class Meta:
         model = OrderItem
         fields = ['id', 'ticket_title', 'quantity', 'price']
-
 
 class OrderSerializer(serializers.ModelSerializer):
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -28,7 +25,6 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_price', 'final_amount', 'discount_amount', 
             'created_at'
         ]
-
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     ticket_class_id = serializers.IntegerField(write_only=True)
@@ -98,13 +94,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     if coupon.used_count >= coupon.total_capacity:
                         raise serializers.ValidationError("Coupon usage limit reached just now.")
 
-                    if coupon.type == 'percentage':
+                    if coupon.discount_type == 'percentage':
                         calculated = (original_price * coupon.value) / 100
                         if coupon.max_discount_limit:
                             discount_amount = min(calculated, coupon.max_discount_limit)
                         else:
                             discount_amount = calculated
-                    elif coupon.type == 'fixed':
+                    elif coupon.discount_type == 'fixed':
                         discount_amount = coupon.value
                     
                     discount_amount = min(discount_amount, original_price)
@@ -132,7 +128,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
             ticket.sold = F('sold') + quantity
             ticket.save()
-            
             ticket.refresh_from_db()
             
             return order

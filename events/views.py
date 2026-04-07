@@ -1,36 +1,34 @@
 from django.shortcuts import render
 from rest_framework import viewsets, permissions, filters 
 from django.db.models import Q
-from .models import Event,Category,TicketClass,Review
-from .serializers import CategorySerializer,EventSerializer,TicketClassSerializer, ReviewSerializer , ReviewDetailSerializer
-from .filters import EventFilter
 from django_filters.rest_framework import DjangoFilterBackend
-
-
+from .models import Event, Category, TicketClass, Review
+from .serializers import CategorySerializer, EventSerializer, TicketClassSerializer, ReviewSerializer, ReviewDetailSerializer
+from .filters import EventFilter
+from .permissions import IsOrganizerOrReadOnly 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset=Category.objects.all()
-    serializer_class=CategorySerializer
-    permission_classes =[permissions.IsAuthenticatedOrReadOnly]
-  
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
   
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.select_related('organizer').prefetch_related(
         'categories', 
         'artists', 
         'ticket_classes'
-        ).filter(is_active=True)
-    serializer_class= EventSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    ).filter(is_active=True)
+    
+    serializer_class = EventSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOrganizerOrReadOnly]
+    
     filterset_class = EventFilter
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description', 'address']
     ordering_fields = ['date', 'created_at']
     
-    
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
-        
         
 class TicketClassViewSet(viewsets.ModelViewSet):
     queryset = TicketClass.objects.all()
@@ -39,8 +37,6 @@ class TicketClassViewSet(viewsets.ModelViewSet):
     filterset_fields = ['event', 'price'] 
     search_fields = ['title']
     ordering_fields = ['price'] 
-    
-    
     
 class ReviewViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
