@@ -1,3 +1,4 @@
+
 <div align="center">
   
 # 🎟️ NexusTicket: High-Performance Ticket Reservation System ✨
@@ -37,65 +38,112 @@ I built this system to demonstrate how to bridge the gap between complex busines
 This project leverages a modern, containerized stack to ensure high availability and scalability.
 
 ### 🌐 Core Backend & Logic
-
-| Category | technologies |
-| :--- | :--- |
-| **Framework** | `Django 5.x` & `Django REST Framework` (DRF) |
-| **Security** | `Simple JWT` (Stateless Auth), `Custom Permissions`, `RBAC` |
-| **Concurrency** | `Database-level Locking`, `F() Expressions` (Atomic Increments) |
-| **Background Jobs** | `Celery` + `Redis` (Automated Order Expiration) |
+* **Framework:** `Django 5.x` & `Django REST Framework` (DRF)
+* **Security:** `Simple JWT` (Stateless Auth), `Custom Permissions`, `RBAC`
+* **Concurrency:** `Database-level Locking`, `F() Expressions` (Atomic Increments)
+* **Background Jobs:** `Celery` + `Redis` (Automated Order Expiration)
 
 ### 💾 Data & Infrastructure
-
-| Category | technologies |
-| :--- | :--- |
-| **Primary DB** | `MySQL 8.0` (Optimized Indexes for Search & Filtering) |
-| **Broker/Cache** | `Redis` (Celery Broker & API Throttling) |
-| **Environment** | `Docker` & `Docker-Compose` (Orchestrated Services) |
-| **Testing** | `Pytest` (Integration/Smoke Testing), `Model-Bakery` |
+* **Primary DB:** `MySQL 8.0` (Optimized Indexes for Search & Filtering)
+* **Broker/Cache:** `Redis` (Celery Broker & API Throttling)
+* **Environment:** `Docker` & `Docker-Compose` (Orchestrated Services)
+* **Testing:** `Pytest` (Integration/Smoke Testing), `Model-Bakery`
 
 ---
+
+## 🚀 Getting Started: Installation & Run Guide
+
+NexusTicket is fully containerized. You don't need to install Python or MySQL on your local machine.
+
+### 📋 Prerequisites
+- **Docker** and **Docker Compose** installed.
+- A `.env` file (see the Environment Variables section below).
+
+### 🛠️ Execution Steps
+
+1. **Clone the Project:**
+`bash
+   git clone [https://github.com/sinajokarr/NexusTicket.git](https://github.com/sinajokarr/NexusTicket.git)
+   cd NexusTicket
+
+
+2.  **Launch Services:**
+    This command builds the images and starts Django, MySQL, Redis, and Celery.
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+3.  **Initialize Database:**
+
+    ```bash
+    docker exec -it nexusticket_web python manage.py migrate
+    ```
+
+4.  **Create Admin User:**
+
+    ```bash
+    docker exec -it nexusticket_web python manage.py createsuperuser
+    ```
+
+### 🛣️ API Access & Documentation
+
+  - **Swagger UI:** `http://127.0.0.1:8000/api/docs/`
+  - **ReDoc:** `http://127.0.0.1:8000/api/redoc/`
+  - **Admin Panel:** `http://127.0.0.1:8000/admin/`
+
+-----
+
+## 🔑 Environment Variables (`.env.example`)
+
+To run this project, create a `.env` file in the root directory and add the following:
+
+```env
+DEBUG=True
+SECRET_KEY=your_secret_key_here
+DATABASE_URL=mysql://root:rootpassword@db:3306/nexusticket
+CELERY_BROKER_URL=redis://redis:6379/0
+```
+
+-----
 
 ## 💻 Technical Deep Dive: Challenges & Solutions
 
 ### 🏎️ 1. Preventing Race Conditions (Atomic Booking)
-* **Challenge:** Multiple users buying the last remaining ticket at the exact same millisecond.
-* **My Solution:** Implemented **`select_for_update()`** and **`F()` expressions**. This ensures that the database handles the increment/decrement of ticket capacity at the engine level, preventing data corruption without sacrificing performance.
-* **Impact:** Guaranteed **Zero Over-selling** even under high-concurrency scenarios.
+
+Multiple users buying the last ticket simultaneously is a classic concurrency problem. I solved this by implementing **`select_for_update()`** and **`F()` expressions**. This ensures the database handles the increment/decrement at the engine level, guaranteeing **Zero Over-selling**.
 
 ### ⏱️ 2. Automated Order Lifecycle (Celery Workers)
-* **Challenge:** Tickets being "locked" by users who never complete the payment.
-* **My Solution:** Designed a **Celery-based background task** that monitors "Pending" orders. If a payment is not verified within 15 minutes, the task automatically cancels the order and restores the ticket capacity.
-* **Impact:** Maximized ticket availability and automated inventory management.
+
+To prevent "locked" inventory from unpaid orders, I designed a **Celery-based background task**. It monitors "Pending" orders and automatically cancels them after 15 minutes, restoring ticket capacity to the pool.
 
 ### 🛡️ 3. Secure Financial Flow (Mock-Bank Integration)
-* **Challenge:** Securely updating order status only after verified bank responses.
-* **My Solution:** Developed a robust **Callback/Verify logic** with atomic updates. The system ensures that the ticket is marked as "Paid" only when a valid `authority_id` is matched and verified via the simulated bank gateway.
-* **Impact:** 100% accurate financial reporting and order synchronization.
 
----
+The system uses a robust **Callback/Verify logic** with atomic updates. Orders are marked as "Paid" only after a valid `authority_id` is matched and verified via the simulated bank gateway, ensuring 100% data synchronization.
+
+-----
 
 ## 📊 Quality Assurance: The "Green" Proof
 
-This project is backed by a comprehensive **Master Integration Test Suite** that validates every layer of the application.
+Every critical layer is validated by a comprehensive **Master Integration Test Suite**.
 
 ```bash
-# Executing the full suite in Docker environment
+# Run the full suite inside the Docker environment
 docker exec -it nexusticket_web python -m pytest tests/test_nexus_ultimate.py -v
-````
+```
 
-  * **Accounts:** JWT Authentication & Custom User Manager validation.
-  * **Coupons:** Precision testing of percentage-based and fixed-amount discounts.
-  * **Integration:** End-to-End flow from Event creation to successful Bank verification.
-  * **Edge Cases:** Capacity limit enforcement and unauthorized review blocking.
+  - **Accounts:** Validates JWT Auth & Custom User Management.
+  - **Coupons:** Precision testing of percentage and fixed discounts.
+  - **Integration:** End-to-End flow from Event creation to Bank verification.
+  - **Edge Cases:** Capacity enforcement and unauthorized review blocking.
 
 -----
 
 ## 💡 Engineering Principles
 
-  * **DRY (Don't Repeat Yourself):** Heavy use of Serializer inheritance and Mixins.
-  * **Separation of Concerns:** Isolated logic for Events, Payments, and Orders.
-  * **Scalability:** Fully Dockerized and ready to be deployed on AWS/DigitalOcean with minimal config changes.
+  - **DRY (Don't Repeat Yourself):** Heavy use of Serializer inheritance and Mixins.
+  - **Separation of Concerns:** Isolated logic for Events, Payments, and Orders.
+  - **Scalability:** Fully Dockerized and ready for cloud deployment (AWS/GCP/DigitalOcean).
 
 -----
 
@@ -105,7 +153,7 @@ docker exec -it nexusticket_web python -m pytest tests/test_nexus_ultimate.py -v
 
 ### **Ready to see high-performance code in action?**
 
-[Explore the Repository](https://www.google.com/url?sa=E&source=gmail&q=https://github.com/sinajokarr/NexusTicket) | [Contact Sina](mailto:cnajokar11@yahoo.com)
+[Explore the Repository](https://github.com/sinajokarr/NexusTicket) | [Contact Sina Abbasi Jokar](mailto:cnajokar11@yahoo.com)
 
 -----
 
