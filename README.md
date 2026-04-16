@@ -1,3 +1,4 @@
+
 <div align="center">
   
 # 🎟️ NexusTicket: High-Performance Ticket Reservation API ✨
@@ -129,4 +130,4 @@ docker exec -it nexusticket_web pytest
 - **DRY (Don't Repeat Yourself):** Heavy use of Serializer inheritance and Mixins.
 - **Separation of Concerns:** Isolated logic for Events, Payments, and Orders.
 - **Scalability:** Fully Dockerized and ready for cloud deployment.
-```
+
