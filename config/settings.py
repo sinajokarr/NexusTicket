@@ -66,7 +66,14 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database - Using DATABASE_URL from .env
 
 DATABASES = {
-    'default': env.db(),
+    'default':{
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'Nexusticket',
+        'USER': 'root',
+        'PASSWORD': 'sina12345',
+        'HOST': '127.0.0.1',
+        'PORT': '3306',
+        }
 }
 
 # Password validation

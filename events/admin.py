@@ -12,3 +12,9 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ["is_active", "date", "categories"] 
     search_fields = ["title", "description"]
     prepopulated_fields = {"slug": ("title",)} 
+    
+
+
+
+
+

@@ -11,3 +11,6 @@ router.register(r"list", EventViewSet, basename='event')
 urlpatterns = [
     path("", include(router.urls))
 ]
+
+
+
