@@ -1,7 +1,6 @@
 from html import escape
 from urllib.parse import urlencode
 import uuid
-
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
@@ -16,6 +15,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from orders.models import Order
 
@@ -98,6 +99,10 @@ def _payment_completion_payload(payment, order):
 class PaymentRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=PaymentRequestSerializer,
+        responses={200: OpenApiTypes.OBJECT, 201: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         serializer = PaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -134,6 +139,7 @@ class MockBankView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(responses={200: OpenApiTypes.STR, 403: OpenApiTypes.STR, 409: OpenApiTypes.STR})
     def get(self, request, authority_id):
         payment = get_object_or_404(Payment.objects.select_related('order'), authority_id=authority_id)
         token_valid, _ = _demo_token_valid(payment, request.query_params.get('demo_token'))
@@ -174,6 +180,10 @@ class PaymentVerifyView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=DemoPaymentCompletionSerializer,
+        responses={200: OpenApiTypes.OBJECT, 403: OpenApiTypes.OBJECT, 409: OpenApiTypes.OBJECT},
+    )
     def post(self, request, authority_id):
         serializer = DemoPaymentCompletionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -192,6 +202,7 @@ class PaymentVerifyView(APIView):
             # A customer may cancel their own pending attempt, but only the signed
             # demo-bank session may mark an order as paid. In production this
             # branch is where a provider-signed callback would be verified.
+            
             if serializer.validated_data['outcome'] == 'success' and not token_valid:
                 raise PermissionDenied('A signed demo payment authorization is required to complete payment.')
 

@@ -1,133 +1,135 @@
+# NexusTicket
 
-<div align="center">
-  
-# 🎟️ NexusTicket: High-Performance Ticket Reservation API ✨
-  
----
-  
-![Django](https://img.shields.io/badge/Framework-Django%205.x%20%7C%20DRF-092E20?style=for-the-badge&logo=django&logoColor=white)
-![MySQL](https://img.shields.io/badge/Database-MySQL%208-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
-![Celery](https://img.shields.io/badge/Async%20Tasks-Celery%20%7C%20Redis-green?style=for-the-badge&logo=celery&logoColor=white)
-![Docker](https://img.shields.io/badge/Infrastructure-Docker%20Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-  
----
-</div>
+NexusTicket is a portfolio ticket-reservation application. It pairs a multilingual React storefront with a Django REST API for event discovery, JWT authentication, inventory-safe reservations, coupons, and a signed demo-payment flow.
 
-## 🎯 Project Vision: Solving the "Flash Sale" Challenge
+> Status: portfolio-ready for local demonstration. See [the audit report](docs/AUDIT_REPORT.md) for verified results and known production limitations.
 
-**NexusTicket** is a production-grade, high-concurrency ticket reservation API designed to handle the critical challenges of event booking. The core focus of this architecture is **Data Integrity** and **Atomic Transactions**, ensuring that even under heavy load, tickets are never over-sold and financial transactions remain consistent.
+## What is included
 
-This system bridges the gap between complex business logic (coupons, tiered pricing) and robust backend infrastructure (Redis caching, background workers).
+- React 19 + Vite storefront with English, Persian (RTL), Turkish, and Russian UI copy.
+- Django REST Framework API with OpenAPI/Swagger and ReDoc.
+- JWT registration, login, and refresh endpoints.
+- Atomic multi-ticket reservation, capacity checks, coupons, cancellation, and Celery-based expiry.
+- A signed, one-time demo-payment page for the local checkout flow; it is not a real payment provider.
+- Docker Compose development stack: Django, MySQL, Redis, and Celery.
 
-<br>
+## Architecture
 
-### 📬 Connect with the Architect
-
-| Platform | Link |
-| :--- | :--- |
-| 🔗 **LinkedIn** | [Sina Abbasi Jokar](https://www.linkedin.com/in/sinajokar/) 💼 |
-| 📧 **Email** | [cnajokar11@yahoo.com](mailto:cnajokar11@yahoo.com) |
-| 🚀 **Portfolio** | [GitHub Profile](https://github.com/sinajokarr) |
-
----
-
-## 🛠️ The Nexus Stack: Technical Specifications
-
-This project leverages a modern, containerized stack to ensure high availability and scalability.
-
-### 🌐 Core Backend & Logic
-* **Framework:** `Django 5.x` & `Django REST Framework` (DRF)
-* **Security:** `Simple JWT` (Stateless Auth), `Custom Permissions`, `RBAC`
-* **Concurrency:** `Database-level Locking`, `F() Expressions` (Atomic Increments)
-* **Background Jobs:** `Celery` + `Redis` (Automated Order Expiration)
-
-### 💾 Data & Infrastructure
-* **Primary DB:** `MySQL 8.0` (Optimized Indexes for Search & Filtering)
-* **Broker/Cache:** `Redis` (Celery Broker & API Throttling)
-* **Environment:** `Docker` & `Docker-Compose` (Orchestrated Services)
-* **Testing:** `Pytest` (Integration/Smoke Testing), `Model-Bakery`
-
----
-
-## 🚀 Getting Started: Installation & Run Guide
-
-NexusTicket is fully containerized. You don't need to install Python or MySQL on your local machine.
-
-### 📋 Prerequisites
-- **Docker** and **Docker Compose** installed.
-- A `.env` file created in the root directory.
-
-### 🛠️ Execution Steps
-
-1. **Clone the Repository:**
-   ```bash
-   git clone [https://github.com/sinajokarr/NexusTicket.git](https://github.com/sinajokarr/NexusTicket.git)
-   cd NexusTicket
-   ```
-
-2. **Configure Environment Variables:**
-   Create a `.env` file in the root directory:
-   ```env
-   DEBUG=True
-   SECRET_KEY=your_secret_key_here
-   DATABASE_URL=mysql://root:sina12345@db:3306/events
-   CELERY_BROKER_URL=redis://redis:6379/0
-   ```
-
-3. **Launch Services:**
-   This command builds the images and starts Django, MySQL, Redis, and Celery.
-   ```bash
-   docker-compose up -d --build
-   ```
-
-4. **Initialize Database & Admin:**
-   ```bash
-   docker exec -it nexusticket_web python manage.py migrate
-   docker exec -it nexusticket_web python manage.py createsuperuser
-   ```
-
-### 🛣️ API Access & Documentation
-
-*Note: The application is mapped to port **8001** on your local machine via Docker.*
-
-- **Swagger UI:** `http://127.0.0.1:8001/api/docs/`
-- **ReDoc:** `http://127.0.0.1:8001/api/redoc/`
-- **Admin Panel:** `http://127.0.0.1:8001/admin/`
-
----
-
-## 💻 Technical Deep Dive: Challenges & Solutions
-
-### 🏎️ 1. Preventing Race Conditions (Atomic Booking)
-Multiple users buying the last ticket simultaneously is a classic concurrency problem. I solved this by implementing **`select_for_update()`** and **`F()` expressions**. This ensures the database handles the increment/decrement at the engine level, guaranteeing **Zero Over-selling**.
-
-### ⏱️ 2. Automated Order Lifecycle (Celery Workers)
-To prevent "locked" inventory from unpaid orders, I designed a **Celery-based background task**. It monitors "Pending" orders and automatically cancels them after 15 minutes, restoring ticket capacity to the pool.
-
-### 🛡️ 3. Secure Financial Flow (Mock-Bank Integration)
-The system uses a robust **Callback/Verify logic** with atomic updates. Orders are marked as "Paid" only after a valid `authority_id` is matched and verified via the simulated bank gateway, ensuring 100% data synchronization.
-
----
-
-## 📊 Quality Assurance: The "Green" Proof
-
-Every critical layer is validated by a comprehensive **Master Integration Test Suite**.
-
-```bash
-# Run the full suite inside the Docker environment
-docker exec -it nexusticket_web pytest
+```mermaid
+flowchart LR
+  Storefront[React + Vite storefront] -->|JWT / JSON API| API[Django REST Framework]
+  API --> DB[(SQLite locally / MySQL in Docker)]
+  API --> Redis[(Redis)]
+  Worker[Celery worker] --> Redis
+  Worker --> DB
 ```
 
-- **Accounts:** Validates JWT Auth & Custom User Management.
-- **Coupons:** Precision testing of percentage and fixed discounts.
-- **Integration:** End-to-End flow from Event creation to Bank verification.
-- **Edge Cases:** Capacity enforcement and unauthorized review blocking.
+Detailed architecture and endpoint notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API_VERIFICATION.md](docs/API_VERIFICATION.md).
 
----
+## Prerequisites
 
-## 💡 Engineering Principles
+- Python 3.11+ (the Docker image uses 3.11; the audit also passed on 3.13)
+- Node.js 20+
+- npm
+- Docker Desktop, only for the optional Compose stack
 
-- **DRY (Don't Repeat Yourself):** Heavy use of Serializer inheritance and Mixins.
-- **Separation of Concerns:** Isolated logic for Events, Payments, and Orders.
-- **Scalability:** Fully Dockerized and ready for cloud deployment.
+## Local development
 
+Create a private environment file; do not commit it.
+
+```bash
+cp .env.example .env
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+Start the API:
+
+```bash
+python manage.py runserver
+```
+
+In a second terminal, start the storefront:
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm ci
+npm run dev
+```
+
+The storefront uses its disclosed fictional inventory when `VITE_API_URL` is empty. To use the local API, set this in `frontend/.env.local` and restart Vite:
+
+```env
+VITE_API_URL=http://127.0.0.1:8000
+VITE_CURRENCY=USD
+```
+
+The API does not ship with seeded public events. Create event records through `/admin/` after creating a superuser, or use the API as an authenticated organizer. This deliberate limitation avoids publishing a hard-coded account or misleading demo credentials.
+
+## Docker development stack
+
+Copy the example configuration first, then start the services:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The API is available at `http://127.0.0.1:8011` unless `NEXUSTICKET_PORT` is changed. The compose file runs migrations on web-container startup. Create an administrator with:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+Docker Compose is a local-development stack. It intentionally does not claim to be a complete production deployment; configure a production WSGI/ASGI server, static/media storage, hosts, TLS termination, and observability before deployment.
+
+## API quick reference
+
+- Health: `GET /health/`
+- Interactive documentation: `/api/docs/`
+- OpenAPI schema: `/api/schema/`
+- Authentication: `/api/auth/register/`, `/api/auth/login/`, `/api/auth/refresh/`
+- Events: `/api/events/list/`, `/api/events/categories/`, `/api/events/tickets/`, `/api/events/reviews/`
+- Reservations: `/api/orders/` and `/api/orders/{id}/cancel/`
+- Payments: `/api/payments/request/`, `/api/payments/mock-bank/{authority_id}/`, `/api/payments/verify/`
+
+Pass an access token as `Authorization: Bearer <access-token>` for protected endpoints. See [API verification](docs/API_VERIFICATION.md) for authentication, scenarios, and response behavior.
+
+## Quality checks
+
+From the repository root:
+
+```bash
+python3 manage.py check
+python3 manage.py makemigrations --check --dry-run
+python3 -m pytest -q
+```
+
+From `frontend/`:
+
+```bash
+npm run lint
+npm run build
+npm audit --omit=dev --audit-level=high
+```
+
+## Security notes
+
+- `.env`, local SQLite databases, and Python cache files are ignored and removed from the repository index by this audit.
+- If a secret was previously committed, removing the file does **not** erase Git history. Rotate affected keys and use GitHub secret scanning/history-rewrite guidance before making the repository public.
+- Production requires a unique `SECRET_KEY` when `DEBUG=False`, explicit `ALLOWED_HOSTS`, CORS origins, CSRF trusted origins, TLS, and secure storage for media.
+- JWTs are currently stored in browser local storage by the SPA. For a high-risk production application, move to a carefully designed secure-cookie/session model and add CSP plus rate limiting.
+
+## Limitations and scope
+
+- The demo payment page is intentionally simulated and must be replaced with a verified provider for real transactions.
+- The storefront’s four languages cover interface copy and fictional local inventory. Live API event content is source-language only; multilingual CMS/API fields are not implemented.
+- No public deployment configuration, error-reporting service, or frontend end-to-end test suite is included yet.
+
+## License
+
+No license is currently declared. Choose a license only after confirming the intended reuse and commercial terms.

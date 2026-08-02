@@ -35,8 +35,8 @@ class TicketClassValidationMixin:
 
 
 class TicketClassSerializer(TicketClassValidationMixin, serializers.ModelSerializer):
-    is_sold_out = serializers.ReadOnlyField()
-    remaining_capacity = serializers.ReadOnlyField()
+    is_sold_out = serializers.BooleanField(read_only=True)
+    remaining_capacity = serializers.IntegerField(read_only=True)
     sold = serializers.IntegerField(read_only=True)
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all(), required=False)
 

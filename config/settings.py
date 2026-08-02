@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,9 +12,13 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 # Core runtime configuration. A local SQLite default makes a fresh checkout
 # runnable, while Docker and production use DATABASE_URL from the environment.
-SECRET_KEY = env('SECRET_KEY', default='django-insecure-local-development-only-change-me')
+LOCAL_DEVELOPMENT_SECRET = 'django-insecure-local-development-only-change-me'
+SECRET_KEY = env('SECRET_KEY', default=LOCAL_DEVELOPMENT_SECRET)
 DEBUG = env.bool('DEBUG', default=True)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', 'testserver'])
+
+if not DEBUG and SECRET_KEY == LOCAL_DEVELOPMENT_SECRET:
+    raise ImproperlyConfigured('SECRET_KEY must be set to a unique value when DEBUG=False.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -126,6 +131,7 @@ cors_origins = env.list(
 )
 CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_ALL_ORIGINS = False
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='memory://')
 CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='cache+memory://')
@@ -141,3 +147,6 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31_536_000)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'
