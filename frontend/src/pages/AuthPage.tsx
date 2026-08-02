@@ -24,6 +24,19 @@ import '../styles/auth.css'
 
 type Mode = 'login' | 'register'
 
+const getSafeNextPath = (value: string | null) => {
+  if (!value) return '/account'
+  const candidate = value.trim()
+  if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.startsWith('/\\')) return '/account'
+  try {
+    const target = new URL(candidate, window.location.origin)
+    if (target.origin !== window.location.origin) return '/account'
+    return `${target.pathname}${target.search}${target.hash}`
+  } catch {
+    return '/account'
+  }
+}
+
 export const AuthPage = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -62,16 +75,15 @@ export const AuthPage = () => {
     try {
       if (apiEnabled) {
         if (mode === 'register') await authApi.register(email, password)
-        await authApi.login(email, password)
+        await authApi.login(email, password, { name: mode === 'register' ? name : undefined })
       } else {
-        localStorage.setItem('nexus-demo-user', JSON.stringify({
+        authApi.completeDemoLogin({
           email,
           name: mode === 'register' ? name : auth.demoGuestName,
-        }))
+        })
         await new Promise((resolve) => window.setTimeout(resolve, 450))
       }
-      const nextPath = searchParams.get('next')
-      navigate(nextPath?.startsWith('/') ? nextPath : '/account')
+      navigate(getSafeNextPath(searchParams.get('next')))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : auth.validation.signInFailed)
     } finally {

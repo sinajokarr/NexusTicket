@@ -9,7 +9,7 @@ export const EventCard = ({ event, featured = false }: { event: EventItem; featu
   const { favoriteIds, toggleFavorite } = useApp()
   const { locale, t } = useLanguage()
   const isFavorite = favoriteIds.includes(event.id)
-  const lowestPrice = Math.min(...event.ticket_classes.map((ticket) => ticket.price))
+  const lowestPrice = event.ticket_classes.length ? Math.min(...event.ticket_classes.map((ticket) => ticket.price)) : null
   const dateBadge = getDateBadge(event.date, locale)
 
   return (
@@ -44,7 +44,7 @@ export const EventCard = ({ event, featured = false }: { event: EventItem; featu
           <span><MapPin size={15} />{event.location}</span>
         </div>
         <div className="event-card__footer">
-          <span className="event-card__price-label">{t('common.from')} <strong>{formatPrice(lowestPrice, locale)}</strong></span>
+          <span className="event-card__price-label">{lowestPrice === null ? t('detail.soldOut') : <>{t('common.from')} <strong>{formatPrice(lowestPrice, locale)}</strong></>}</span>
           <Link className="text-link" to={`/events/${event.slug}`}>{t('common.details')} <ArrowLeft size={15} aria-hidden="true" /></Link>
         </div>
       </div>

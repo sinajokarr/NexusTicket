@@ -20,8 +20,13 @@ import { useSearchParams } from '../router'
 import type { EventItem } from '../types'
 
 type ViewMode = 'grid' | 'list'
-const maxPriceCap = 150
+const demoMaxPriceCap = 150
 const localeTag = (locale: string) => locale === 'fa' ? 'fa-IR' : locale === 'ru' ? 'ru-RU' : locale === 'tr' ? 'tr-TR' : 'en-US'
+
+const lowestTicketPrice = (event: EventItem) => {
+  const prices = event.ticket_classes.map((ticket) => ticket.price).filter(Number.isFinite)
+  return prices.length ? Math.min(...prices) : 0
+}
 
 const viewLabels: Record<Locale, { grid: string; list: string }> = {
   en: { grid: 'Grid view', list: 'List view' },
@@ -33,8 +38,8 @@ const viewLabels: Record<Locale, { grid: string; list: string }> = {
 export const EventsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const { locale, t } = useLanguage()
-  const categories = useLocalizedCategories()
-  const cities = useLocalizedCities()
+  const localizedCategories = useLocalizedCategories()
+  const localizedCities = useLocalizedCities()
   const localizedEvents = useLocalizedEvents()
   const priorLocale = useRef(locale)
   const [items, setItems] = useState<EventItem[]>(localizedEvents)
@@ -44,11 +49,35 @@ export const EventsPage = () => {
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [location, setLocation] = useState(searchParams.get('location') ?? '')
   const [dateWindow, setDateWindow] = useState('')
-  const [maxPrice, setMaxPrice] = useState(maxPriceCap)
+  const [maxPrice, setMaxPrice] = useState<number | null>(() => apiEnabled ? null : demoMaxPriceCap)
   const [sort, setSort] = useState(searchParams.get('sort') ?? 'soon')
   const [view, setView] = useState<ViewMode>('grid')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(6)
+
+  const categories = useMemo(() => {
+    if (!apiEnabled) return localizedCategories
+    return Array.from(new Map(
+      items.flatMap((item) => item.categories).map((category) => [category.id, category] as const),
+    ).values())
+  }, [items, localizedCategories])
+
+  const cities = useMemo(() => {
+    if (!apiEnabled) return localizedCities
+    return Array.from(new Set(items.map((item) => item.location).filter(Boolean)))
+      .sort((left, right) => left.localeCompare(right, locale))
+      .map((value) => ({ value, label: value }))
+  }, [items, locale, localizedCities])
+
+  const priceRange = useMemo(() => {
+    if (!apiEnabled) return { min: 10, max: demoMaxPriceCap, step: 2 }
+    const highestPrice = Math.max(0, ...items.flatMap((item) => item.ticket_classes.map((ticket) => ticket.price)).filter(Number.isFinite))
+    if (!highestPrice) return { min: 0, max: demoMaxPriceCap, step: 2 }
+    const roundingUnit = 10 ** Math.max(0, Math.floor(Math.log10(highestPrice)) - 1)
+    const max = Math.ceil(highestPrice / roundingUnit) * roundingUnit
+    return { min: 0, max: Math.max(1, max), step: Math.max(1, Math.round(max / 100)) }
+  }, [items])
+  const selectedMaxPrice = Math.min(maxPrice ?? priceRange.max, priceRange.max)
 
   const loadEvents = () => {
     if (!apiEnabled) return
@@ -74,6 +103,10 @@ export const EventsPage = () => {
     }
   }, [locale])
 
+  useEffect(() => {
+    setMaxPrice((current) => current === null ? null : Math.min(current, priceRange.max))
+  }, [priceRange.max])
+
   useEffect(() => { loadEvents() }, [])
 
   const filtered = useMemo(() => {
@@ -88,20 +121,20 @@ export const EventsPage = () => {
     }
     const rows = items.filter((event) => {
       const haystack = `${event.title} ${event.location} ${event.artists.map((artist) => artist.name).join(' ')}`.toLocaleLowerCase(locale)
-      const lowest = Math.min(...event.ticket_classes.map((ticket) => ticket.price))
+      const lowest = lowestTicketPrice(event)
       return (!search || haystack.includes(search.toLocaleLowerCase(locale)))
         && (!category || event.categories.some((item) => item.slug === category))
         && (!location || event.location.toLocaleLowerCase(locale).includes(location.toLocaleLowerCase(locale)))
-        && lowest <= maxPrice
+        && lowest <= selectedMaxPrice
         && inWindow(event)
     })
     return rows.sort((a, b) => {
       if (sort === 'popular') return (b.reviewCount ?? 0) - (a.reviewCount ?? 0)
-      if (sort === 'price-low') return Math.min(...a.ticket_classes.map((ticket) => ticket.price)) - Math.min(...b.ticket_classes.map((ticket) => ticket.price))
-      if (sort === 'price-high') return Math.min(...b.ticket_classes.map((ticket) => ticket.price)) - Math.min(...a.ticket_classes.map((ticket) => ticket.price))
+      if (sort === 'price-low') return lowestTicketPrice(a) - lowestTicketPrice(b)
+      if (sort === 'price-high') return lowestTicketPrice(b) - lowestTicketPrice(a)
       return new Date(a.date).getTime() - new Date(b.date).getTime()
     })
-  }, [category, dateWindow, items, locale, location, maxPrice, search, sort])
+  }, [category, dateWindow, items, locale, location, search, selectedMaxPrice, sort])
 
   const applySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -118,12 +151,12 @@ export const EventsPage = () => {
     setSearch('')
     setLocation('')
     setDateWindow('')
-    setMaxPrice(maxPriceCap)
+    setMaxPrice(apiEnabled ? null : demoMaxPriceCap)
     setSort('soon')
     setSearchParams({})
   }
 
-  const selectedCount = [category, location, dateWindow, maxPrice < maxPriceCap].filter(Boolean).length
+  const selectedCount = [category, location, dateWindow, maxPrice !== null && maxPrice < priceRange.max].filter(Boolean).length
 
   return (
     <main id="main-content" className="page-shell events-page">
@@ -133,7 +166,7 @@ export const EventsPage = () => {
           <div className="filters-panel__header"><h2><SlidersHorizontal size={18} /> {t('listing.filters')}</h2><div><button className="filters-reset" type="button" onClick={resetFilters}>{t('listing.reset')}</button><button className="icon-button filters-close" type="button" aria-label={t('common.close')} onClick={() => setFiltersOpen(false)}><X size={20} /></button></div></div>
           <div className="filter-group"><h3>{t('listing.category')}</h3><div className="filter-options"><label><input type="radio" name="category" checked={!category} onChange={() => setCategory('')} /><span>{t('listing.allCategories')}</span></label>{categories.map((item) => <label key={item.id}><input type="radio" name="category" checked={category === item.slug} onChange={() => setCategory(item.slug)} /><span>{item.name}</span></label>)}</div></div>
           <div className="filter-group"><h3>{t('listing.time')}</h3><div className="filter-options"><label><input type="radio" name="date" checked={dateWindow === 'week'} onChange={() => setDateWindow('week')} /><span>{t('listing.comingWeek')}</span></label><label><input type="radio" name="date" checked={dateWindow === 'weekend'} onChange={() => setDateWindow('weekend')} /><span>{t('listing.weekend')}</span></label><label><input type="radio" name="date" checked={dateWindow === 'month'} onChange={() => setDateWindow('month')} /><span>{t('listing.month')}</span></label><label><input type="radio" name="date" checked={!dateWindow} onChange={() => setDateWindow('')} /><span>{t('listing.anyDate')}</span></label></div></div>
-          <div className="filter-group"><h3>{t('listing.price')}</h3><div className="price-range-label"><span>{t('listing.upTo')}</span><strong>{formatPrice(maxPrice, locale)}</strong></div><input className="range-input" type="range" min="10" max={maxPriceCap} step="2" value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} aria-label={t('listing.price')} /><div className="range-ends"><span>{formatPrice(10, locale)}</span><span>{formatPrice(maxPriceCap, locale)}</span></div></div>
+          <div className="filter-group"><h3>{t('listing.price')}</h3><div className="price-range-label"><span>{t('listing.upTo')}</span><strong>{formatPrice(selectedMaxPrice, locale)}</strong></div><input className="range-input" type="range" min={priceRange.min} max={priceRange.max} step={priceRange.step} value={selectedMaxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} aria-label={t('listing.price')} /><div className="range-ends"><span>{formatPrice(priceRange.min, locale)}</span><span>{formatPrice(priceRange.max, locale)}</span></div></div>
           <div className="filter-group"><h3>{t('listing.venue')}</h3><label className="select-wrap"><MapPin size={16} /><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="">{t('listing.allVenues')}</option>{cities.map((city) => <option value={city.value} key={city.value}>{city.label}</option>)}</select><ChevronDown size={15} /></label></div>
           <button className="button button--primary button--full filters-apply" type="button" onClick={() => setFiltersOpen(false)}>{t('listing.showEvents', { count: formatNumber(filtered.length, locale) })}</button>
         </aside>

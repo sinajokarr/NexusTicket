@@ -1,10 +1,13 @@
 import { Heart } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { EventCard } from '../components/EventCard'
-import { StatePanel } from '../components/StatePanel'
+import { EventSkeletons, RefreshButton, StatePanel } from '../components/StatePanel'
 import { useApp } from '../context/AppContext'
 import { useLocalizedEvents } from '../data/events'
 import { type Locale, useLanguage } from '../i18n'
+import { apiEnabled, eventApi } from '../lib/api'
 import { Link } from '../router'
+import type { EventItem } from '../types'
 
 type FavoritesInlineCopy = {
   eyebrow: string
@@ -43,8 +46,27 @@ const favoritesCopy: Record<Locale, FavoritesInlineCopy> = {
 export const FavoritesPage = () => {
   const { favoriteIds } = useApp()
   const { locale, t } = useLanguage()
-  const events = useLocalizedEvents()
+  const localizedEvents = useLocalizedEvents()
   const copy = favoritesCopy[locale]
+  const [events, setEvents] = useState<EventItem[]>(() => apiEnabled ? [] : localizedEvents)
+  const [loading, setLoading] = useState(apiEnabled)
+  const [loadError, setLoadError] = useState('')
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      setEvents(apiEnabled ? await eventApi.list() : localizedEvents)
+    } catch (reason) {
+      setEvents([])
+      setLoadError(reason instanceof Error ? reason.message : t('listing.connectionError'))
+    } finally {
+      setLoading(false)
+    }
+  }, [localizedEvents, t])
+
+  useEffect(() => { void loadEvents() }, [loadEvents])
+
   const favorites = events.filter((event) => favoriteIds.includes(event.id))
 
   return (
@@ -57,7 +79,9 @@ export const FavoritesPage = () => {
         </div>
       </section>
       <section className="container section">
-        {favorites.length ? (
+        {loading ? <EventSkeletons /> : loadError ? (
+          <StatePanel type="error" title={t('listing.connectionError')} description={loadError} action={<RefreshButton onClick={() => void loadEvents()} />} />
+        ) : favorites.length ? (
           <div className="event-grid event-grid--four">{favorites.map((event) => <EventCard event={event} key={event.id} />)}</div>
         ) : (
           <StatePanel

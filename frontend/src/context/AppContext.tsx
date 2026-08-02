@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { AUTH_CHANGE_EVENT, getAuthScope } from '../lib/api'
 import type { CartItem, EventItem, TicketClass } from '../types'
-import { useLocalStorage } from '../hooks/useLocalStorage'
 import { type Locale, useLanguage } from '../i18n'
 
 type Toast = { message: string; tone?: 'success' | 'error' | 'info' } | null
@@ -30,12 +30,51 @@ const cartAddedCopy: Record<Locale, string> = {
   tr: 'Biletler rezervasyonlarınıza eklendi.',
 }
 
+const scopedKey = (kind: 'cart' | 'favorites', scope: string) => `nexus-${kind}:${scope}`
+
+const readScopedList = <T,>(kind: 'cart' | 'favorites', scope: string): T[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(scopedKey(kind, scope)) ?? '[]') as unknown
+    return Array.isArray(parsed) ? parsed as T[] : []
+  } catch {
+    return []
+  }
+}
+
+const writeScopedList = <T,>(kind: 'cart' | 'favorites', scope: string, value: T[]) => {
+  try {
+    localStorage.setItem(scopedKey(kind, scope), JSON.stringify(value))
+  } catch {
+    // Keep in-memory state usable when storage is unavailable.
+  }
+}
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { locale } = useLanguage()
-  const [cart, setCart] = useLocalStorage<CartItem[]>('nexus-cart', [])
-  const [favoriteIds, setFavoriteIds] = useLocalStorage<number[]>('nexus-favorites', [])
+  const initialScope = getAuthScope()
+  const scopeRef = useRef(initialScope)
+  const [scope, setScope] = useState(initialScope)
+  const [cart, setCart] = useState<CartItem[]>(() => readScopedList<CartItem>('cart', initialScope))
+  const [favoriteIds, setFavoriteIds] = useState<number[]>(() => readScopedList<number>('favorites', initialScope))
   const [cartOpen, setCartOpen] = useState(false)
   const [toast, setToast] = useState<Toast>(null)
+
+  useEffect(() => {
+    const syncScope = () => {
+      const nextScope = getAuthScope()
+      if (nextScope === scopeRef.current) return
+      scopeRef.current = nextScope
+      setScope(nextScope)
+      setCart(readScopedList<CartItem>('cart', nextScope))
+      setFavoriteIds(readScopedList<number>('favorites', nextScope))
+      setCartOpen(false)
+    }
+    window.addEventListener(AUTH_CHANGE_EVENT, syncScope)
+    return () => window.removeEventListener(AUTH_CHANGE_EVENT, syncScope)
+  }, [])
+
+  useEffect(() => { writeScopedList('cart', scope, cart) }, [cart, scope])
+  useEffect(() => { writeScopedList('favorites', scope, favoriteIds) }, [favoriteIds, scope])
 
   const showToast = (message: string, tone: NonNullable<Toast>['tone'] = 'success') => {
     setToast({ message, tone })

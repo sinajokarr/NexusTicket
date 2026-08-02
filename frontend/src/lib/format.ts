@@ -1,10 +1,13 @@
 import type { Locale } from '../i18n'
 import { getIntlLocale } from '../i18n'
 
+const configuredCurrency = import.meta.env.VITE_CURRENCY?.trim().toUpperCase()
+export const priceCurrency = configuredCurrency && /^[A-Z]{3}$/.test(configuredCurrency) ? configuredCurrency : 'USD'
+
 export const formatPrice = (price: number | string, locale: Locale = 'en') =>
   new Intl.NumberFormat(getIntlLocale(locale), {
     style: 'currency',
-    currency: 'USD',
+    currency: priceCurrency,
     currencyDisplay: 'narrowSymbol',
     maximumFractionDigits: 0,
   }).format(Number(price) || 0)

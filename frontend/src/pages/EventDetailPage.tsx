@@ -16,15 +16,15 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from '../router'
 import { EventCard } from '../components/EventCard'
 import { StatePanel } from '../components/StatePanel'
 import { useApp } from '../context/AppContext'
 import { useLocalizedEvents } from '../data/events'
 import { localeMeta, type Locale, useLanguage } from '../i18n'
-import { apiEnabled, eventApi } from '../lib/api'
-import { classNames, formatDate, formatNumber, formatPrice, formatTime } from '../lib/format'
+import { apiEnabled, eventApi, reviewApi, type EventReview } from '../lib/api'
+import { classNames, formatDate, formatNumber, formatPrice, formatTime, priceCurrency } from '../lib/format'
 import type { EventItem, TicketClass } from '../types'
 
 type DetailExtraCopy = {
@@ -148,34 +148,62 @@ const getFirstAvailable = (event: EventItem) => event.ticket_classes.find((ticke
 export const EventDetailPage = () => {
   const { slug } = useParams()
   const { locale, t } = useLanguage()
-  const events = useLocalizedEvents()
-  const fallback = events.find((item) => item.slug === slug)
-  const [event, setEvent] = useState<EventItem | undefined>(fallback)
-  const [loading, setLoading] = useState(apiEnabled && !fallback)
-  const [selectedTicket, setSelectedTicket] = useState<TicketClass | undefined>(fallback ? getFirstAvailable(fallback) : undefined)
+  const localizedEvents = useLocalizedEvents()
+  const [catalog, setCatalog] = useState<EventItem[]>(() => apiEnabled ? [] : localizedEvents)
+  const [event, setEvent] = useState<EventItem | undefined>(() => apiEnabled ? undefined : localizedEvents.find((item) => item.slug === slug))
+  const [loading, setLoading] = useState(apiEnabled)
+  const [loadError, setLoadError] = useState('')
+  const [reviews, setReviews] = useState<EventReview[]>([])
+  const [selectedTicket, setSelectedTicket] = useState<TicketClass | undefined>(() => {
+    const initialEvent = apiEnabled ? undefined : localizedEvents.find((item) => item.slug === slug)
+    return initialEvent ? getFirstAvailable(initialEvent) : undefined
+  })
   const [quantity, setQuantity] = useState(1)
   const [activeImage, setActiveImage] = useState(0)
   const [imageOpen, setImageOpen] = useState(false)
   const { addToCart, favoriteIds, toggleFavorite, showToast } = useApp()
   const extra = detailExtra[locale]
 
-  useEffect(() => {
-    if (fallback) {
-      setEvent(fallback)
-      setSelectedTicket(getFirstAvailable(fallback))
-      setLoading(false)
-      return
-    }
-    if (!apiEnabled) return
-    eventApi.list().then((rows) => {
-      const found = rows.find((item) => item.slug === slug)
+  const loadEvent = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    setEvent(undefined)
+    setSelectedTicket(undefined)
+    setReviews([])
+    try {
+      const [found, rows] = apiEnabled
+        ? await Promise.all([eventApi.bySlug(slug ?? ''), eventApi.list()])
+        : [localizedEvents.find((item) => item.slug === slug), localizedEvents]
+      setCatalog(rows)
       setEvent(found)
       setSelectedTicket(found ? getFirstAvailable(found) : undefined)
-    }).finally(() => setLoading(false))
-  }, [fallback, slug])
+    } catch (reason) {
+      setCatalog([])
+      setLoadError(reason instanceof Error ? reason.message : t('listing.connectionError'))
+    } finally {
+      setLoading(false)
+    }
+  }, [localizedEvents, slug, t])
 
-  const gallery = useMemo(() => event ? [event.cover_image, ...galleryImages.filter((image) => image !== event.cover_image)] : [], [event])
+  useEffect(() => { void loadEvent() }, [loadEvent])
+
+  useEffect(() => {
+    if (!apiEnabled || !event) return
+    let isCurrent = true
+    void reviewApi.listForEvent(event.id)
+      .then((items) => { if (isCurrent) setReviews(items) })
+      .catch(() => { if (isCurrent) setReviews([]) })
+    return () => { isCurrent = false }
+  }, [event?.id])
+
+  const gallery = useMemo(() => {
+    if (!event) return []
+    // The API currently exposes one verified cover image. Do not decorate a live
+    // event with unrelated demo photography while connected to that API.
+    return apiEnabled ? [event.cover_image] : [event.cover_image, ...galleryImages.filter((image) => image !== event.cover_image)]
+  }, [event])
   if (loading) return <main id="main-content" className="page-shell"><div className="container detail-loading"><div className="skeleton skeleton--detail-image" /><div><div className="skeleton skeleton--line" /><div className="skeleton skeleton--line skeleton--medium" /><div className="skeleton skeleton--line" /></div></div></main>
+  if (loadError) return <main id="main-content" className="page-shell"><div className="container"><StatePanel type="error" title={t('listing.connectionError')} description={loadError} action={<button className="button button--primary" type="button" onClick={() => void loadEvent()}>{t('listing.retry')}</button>} /></div></main>
   if (!event || !selectedTicket) return <main id="main-content" className="page-shell"><div className="container"><StatePanel type="empty" title={t('detail.notFound')} description={t('detail.notFoundDescription')} action={<Link className="button button--primary" to="/events">{t('detail.backToEvents')}</Link>} /></div></main>
 
   const lowestPrice = Math.min(...event.ticket_classes.map((ticket) => ticket.price))
@@ -183,6 +211,19 @@ export const EventDetailPage = () => {
   const activeImageUrl = gallery[activeImage] ?? event.cover_image
   const amount = selectedTicket.price * quantity
   const availability = selectedTicket.remaining_capacity
+  const visibleReviews = apiEnabled
+    ? reviews.map((review) => ({
+      name: review.user_email.split('@')[0] || review.user_email,
+      initial: review.user_email.slice(0, 1).toLocaleUpperCase(locale),
+      score: review.rating,
+      text: review.comment,
+      date: formatDate(review.created_at, locale),
+    }))
+    : extra.reviewList
+  const reviewCount = visibleReviews.length
+  const reviewAverage = reviewCount
+    ? visibleReviews.reduce((sum, review) => sum + review.score, 0) / reviewCount
+    : undefined
 
   const addSelection = () => {
     if (selectedTicket.is_sold_out || availability === 0) return
@@ -217,7 +258,7 @@ export const EventDetailPage = () => {
             <div><span><CalendarDays size={19} /></span><div><strong>{formatDate(event.date, locale, { weekday: 'long' })}</strong><p>{formatTime(event.date, locale)} · {t('detail.venueDoors')}</p></div></div>
             <div><span><MapPin size={19} /></span><div><strong>{event.location}</strong><p>{event.address}</p></div></div>
           </div>
-          <div className="detail-rating"><span><Star size={16} fill="currentColor" /> {event.rating?.toLocaleString(localeMeta[locale].intl) ?? t('detail.recent')}</span>{event.reviewCount && <a href="#reviews">{t('detail.basedOn', { count: formatNumber(event.reviewCount, locale) })}</a>}<span className="detail-rating__dot" /> <span>{t('detail.verifiedReviews')}</span></div>
+          <div className="detail-rating">{reviewAverage ? <><span><Star size={16} fill="currentColor" /> {reviewAverage.toLocaleString(localeMeta[locale].intl, { maximumFractionDigits: 1 })}</span><a href="#reviews">{t('detail.basedOn', { count: formatNumber(reviewCount, locale) })}</a><span className="detail-rating__dot" /> <span>{t('detail.verifiedReviews')}</span></> : <span>{t('detail.recent')}</span>}</div>
         </div>
         <aside className="ticket-picker" aria-labelledby="ticket-picker-heading">
           <div className="ticket-picker__header"><div><span className="eyebrow">{t('detail.bookingSecure')}</span><h2 id="ticket-picker-heading">{t('detail.chooseTicket')}</h2></div><Ticket size={23} /></div>
@@ -240,16 +281,16 @@ export const EventDetailPage = () => {
         <div className="event-content">
           <section className="content-block"><span className="eyebrow">{t('detail.about')}</span><h2>{event.title}</h2><p>{event.description}</p><p>{extra.descriptionExtra}</p></section>
           <section className="content-block details-accordion"><h2>{t('detail.whatToKnow')}</h2><details open><summary>{t('detail.entryTiming')} <ChevronDown size={18} /></summary><p>{extra.entryText}</p></details><details><summary>{t('detail.cancellation')} <ChevronDown size={18} /></summary><p>{extra.cancellationText}</p></details><details><summary>{t('detail.access')} <ChevronDown size={18} /></summary><p>{event.address}. {extra.accessText}</p></details></section>
-          <section className="content-block" id="reviews"><div className="content-block__heading"><div><span className="eyebrow">{extra.reviewEyebrow}</span><h2>{t('detail.reviews')}</h2></div><div className="reviews-score"><strong>{event.rating?.toLocaleString(localeMeta[locale].intl) ?? '4.9'}</strong><span><span className="review-stars">★★★★★</span><small>{t('detail.basedOn', { count: formatNumber(event.reviewCount ?? 0, locale) })}</small></span></div></div><div className="reviews-list">{extra.reviewList.map((review) => <article className="review-card" key={review.name}><span className="review-avatar">{review.initial}</span><div><header><strong>{review.name}</strong><time>{review.date}</time></header><span className="review-stars">{'★'.repeat(review.score)}{'☆'.repeat(5 - review.score)}</span><p>{review.text}</p></div></article>)}</div><button className="button button--secondary" type="button">{t('detail.showReviews')}</button></section>
+          {visibleReviews.length > 0 && <section className="content-block" id="reviews"><div className="content-block__heading"><div><span className="eyebrow">{extra.reviewEyebrow}</span><h2>{t('detail.reviews')}</h2></div><div className="reviews-score"><strong>{reviewAverage?.toLocaleString(localeMeta[locale].intl, { maximumFractionDigits: 1 })}</strong><span><span className="review-stars">★★★★★</span><small>{t('detail.basedOn', { count: formatNumber(reviewCount, locale) })}</small></span></div></div><div className="reviews-list">{visibleReviews.map((review, index) => <article className="review-card" key={`${review.name}-${index}`}><span className="review-avatar">{review.initial}</span><div><header><strong>{review.name}</strong><time>{review.date}</time></header><span className="review-stars">{'★'.repeat(review.score)}{'☆'.repeat(5 - review.score)}</span><p>{review.text}</p></div></article>)}</div>{!apiEnabled && <button className="button button--secondary" type="button">{t('detail.showReviews')}</button>}</section>}
         </div>
         <aside className="event-info-rail"><div><span><Clock3 size={19} /></span><div><small>{t('detail.eventTime')}</small><strong>{formatDate(event.date, locale)} · {formatTime(event.date, locale)}</strong></div></div><div><span><UsersRound size={19} /></span><div><small>{t('detail.designedFor')}</small><strong>{t('detail.designedForValue')}</strong></div></div><div><span><Truck size={19} /></span><div><small>{t('detail.delivery')}</small><strong>{t('detail.deliveryValue')}</strong></div></div></aside>
       </section>
 
-      <section className="section container related-events" aria-labelledby="related-heading"><div className="section-heading section-heading--split"><div><span className="eyebrow">{t('detail.related')}</span><h2 id="related-heading">{t('detail.relatedTitle')}</h2></div><Link className="text-link" to="/events">{t('common.seeAll')}</Link></div><div className="event-grid event-grid--three">{events.filter((item) => item.id !== event.id).slice(0, 3).map((item) => <EventCard event={item} key={item.id} />)}</div></section>
+      <section className="section container related-events" aria-labelledby="related-heading"><div className="section-heading section-heading--split"><div><span className="eyebrow">{t('detail.related')}</span><h2 id="related-heading">{t('detail.relatedTitle')}</h2></div><Link className="text-link" to="/events">{t('common.seeAll')}</Link></div><div className="event-grid event-grid--three">{catalog.filter((item) => item.id !== event.id).slice(0, 3).map((item) => <EventCard event={item} key={item.id} />)}</div></section>
 
       <div className="mobile-reserve-bar"><div><span>{t('common.from')}</span><strong>{formatPrice(lowestPrice, locale)}</strong></div><button className="button button--primary" type="button" onClick={addSelection}>{t('detail.addToCart')}</button></div>
       {imageOpen && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={`${extra.imageOf} ${event.title}`}><button type="button" className="icon-button icon-button--light" onClick={() => setImageOpen(false)} aria-label={extra.removeImage}><X size={22} /></button><img src={activeImageUrl} alt={`${extra.imageOf} ${event.title}`} /></div>}
-      <script type="application/ld+json">{JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name: event.title, startDate: event.date, location: { '@type': 'Place', name: event.location, address: event.address }, image: [event.cover_image], offers: { '@type': 'Offer', price: lowestPrice, priceCurrency: 'USD', availability: selectedTicket.is_sold_out ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock', url: window.location.href } })}</script>
+      <script type="application/ld+json">{JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name: event.title, startDate: event.date, location: { '@type': 'Place', name: event.location, address: event.address }, image: [event.cover_image], offers: { '@type': 'Offer', price: lowestPrice, priceCurrency, availability: selectedTicket.is_sold_out ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock', url: window.location.href } })}</script>
     </main>
   )
 }

@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from './router'
 import { CartDrawer } from './components/CartDrawer'
 import { Footer, Header, MobileBottomNav } from './components/Layout'
 import { useApp, AppProvider } from './context/AppContext'
 import { type Locale, LanguageProvider, useLanguage } from './i18n'
+import { AUTH_CHANGE_EVENT, hasAuthenticatedSession } from './lib/api'
 import { AccountPage } from './pages/AccountPage'
 import { AuthPage } from './pages/AuthPage'
 import { CheckoutPage } from './pages/CheckoutPage'
@@ -44,13 +45,22 @@ const Toast = () => {
   return <div className={`toast toast--${toast.tone ?? 'success'}`} role="status">{toast.message}</div>
 }
 
-const isAuthenticated = () => Boolean(localStorage.getItem('nexus-demo-user') || localStorage.getItem('nexus-access-token'))
-
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const { locale } = useLanguage()
-  const authenticated = isAuthenticated()
+  const [authenticated, setAuthenticated] = useState(hasAuthenticatedSession)
+
+  useEffect(() => {
+    const syncAuthentication = () => setAuthenticated(hasAuthenticatedSession())
+    syncAuthentication()
+    window.addEventListener(AUTH_CHANGE_EVENT, syncAuthentication)
+    const timer = window.setInterval(syncAuthentication, 60_000)
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncAuthentication)
+      window.clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     if (!authenticated) navigate(`/login?next=${encodeURIComponent(`${pathname}${search}`)}`, true)
@@ -76,7 +86,7 @@ const AppShell = () => {
         <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
-        <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/legal" element={<LegalPage />} />

@@ -23,10 +23,14 @@ npm run build
 یک فایل `.env.local` کنار `package.json` بسازید:
 
 ```env
-VITE_API_URL=http://127.0.0.1:8001
+VITE_API_URL=http://127.0.0.1:8011
 ```
 
-Without this variable, the UI uses the localized fictional US event inventory. With it configured, event listings, authentication, order creation, and payment requests are read from the Django API.
+Without this variable, the UI is explicitly in demo mode and uses the localized fictional US event inventory. With it configured, the events list and detail pages, authentication, reservations, payment redirect, and account order status use the Django API. An unavailable configured API shows an error state; it never silently switches back to fictional inventory.
+
+In connected mode the full cart is submitted as one atomic order, discount codes are validated by the server, and the browser only marks a reservation successful after the API returns `paid` following the payment redirect. Favorites and display-only profile preferences remain scoped to the signed-in browser account because the API does not currently expose profile or favorites endpoints.
+
+If the connected API's numeric prices are not USD, set `VITE_CURRENCY` to its ISO-4217 code (for example, `IRR`). The same value is used for visible prices and the product-offer schema.
 
 ## مسیرها
 
@@ -50,4 +54,4 @@ Without this variable, the UI uses the localized fictional US event inventory. W
 
 ## ملاحظات اتصال کامل
 
-The current API creates one order per `ticket_class`. The UI keeps multiple selections locally, while the connected API checkout currently completes one ticket type per request. Persistent favorites, a complete profile, richer digital-ticket data, and multi-item checkout still need backend endpoints.
+`VITE_API_URL` must point to the public API address that the browser can reach (Docker defaults to port `8011`). The payment service must also be configured with the frontend base URL so its verified return route can return to `/checkout`.

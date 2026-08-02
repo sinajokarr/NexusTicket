@@ -1,19 +1,19 @@
-import os
-from pathlib import Path
-import environ
 from datetime import timedelta
+from pathlib import Path
 
-# Initialize environment variables
+import environ
 
-env = environ.Env(DEBUG=(bool, False))
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+env = environ.Env(DEBUG=(bool, True))
+environ.Env.read_env(BASE_DIR / '.env')
 
-SECRET_KEY = env('SECRET_KEY')
-DEBUG = env('DEBUG')
-ALLOWED_HOSTS = []
 
-# Application definition
+# Core runtime configuration. A local SQLite default makes a fresh checkout
+# runnable, while Docker and production use DATABASE_URL from the environment.
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-local-development-only-change-me')
+DEBUG = env.bool('DEBUG', default=True)
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', 'testserver'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,21 +62,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
-
-# Database - Using DATABASE_URL from .env
+ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASES = {
-    'default':{
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'Nexusticket',
-        'USER': 'root',
-        'PASSWORD': 'sina12345',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
-        }
+    'default': env.db(
+        'DATABASE_URL',
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    ),
 }
-
-# Password validation
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -84,8 +77,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
-
-# REST Framework Settings
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -103,42 +94,50 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# JWT Settings
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Spectacular Settings
-
 SPECTACULAR_SETTINGS = {
     'TITLE': 'NexusTicket API',
-    'DESCRIPTION': 'High-performance ticket reservation system',
-    'VERSION': '1.0.0',
+    'DESCRIPTION': 'Secure ticket reservation API',
+    'VERSION': '1.1.0',
 }
-
-# Internationalization
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files
-
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Custom User Model
-
 AUTH_USER_MODEL = 'accounts.User'
 
-# CORS & Celery
+# Local Vite development is allowed by default. Production should set an
+# explicit comma-separated CORS_ALLOWED_ORIGINS value; wildcard CORS is never used.
+cors_origins = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://127.0.0.1:5173', 'http://localhost:5173'],
+)
+CORS_ALLOWED_ORIGINS = cors_origins
+CORS_ALLOW_ALL_ORIGINS = False
 
-CORS_ALLOW_ALL_ORIGINS = True 
-CELERY_BROKER_URL = env('CELERY_BROKER_URL')
-CELERY_RESULT_BACKEND = env('CELERY_BROKER_URL')
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='memory://')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='cache+memory://')
+CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 
+FRONTEND_BASE_URL = env('FRONTEND_BASE_URL', default='http://127.0.0.1:5173').rstrip('/')
+PAYMENT_PUBLIC_BASE_URL = env('PAYMENT_PUBLIC_BASE_URL', default='http://127.0.0.1:8000').rstrip('/')
 
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31_536_000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
