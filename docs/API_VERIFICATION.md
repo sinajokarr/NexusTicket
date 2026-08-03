@@ -23,10 +23,9 @@ Verified on 2026-08-02 with Django 5.2.7, DRF 3.16.1, Python 3.13.7, SQLite test
 
 ## Contract notes
 
-- Event list responses may be a raw array or a paginated `results` object; the frontend supports both.
+- Event list responses may be a raw array or a paginated `results` object.
 - Event detail uses the event `slug`, not numeric ID.
 - Orders accept `{ "items": [{ "ticket_class_id": 1, "quantity": 2 }] }`; legacy single-line input remains supported by the API.
-- The client only redirects to HTTP(S) `payment_url` values returned by the API.
 - API errors use DRF field/detail payloads. The client extracts the first actionable message and shows it in-page.
 
 ## Not verified against a live provider
