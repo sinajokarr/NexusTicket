@@ -1,57 +1,44 @@
-# NexusTicket Frontend
+# SinShop Frontend
 
-An independent, international event-discovery and ticket-reservation frontend for the NexusTicket API. The demo starts in English and includes fully localized English, Persian (RTL), Russian, and Turkish experiences.
+A polished, multilingual React storefront for active-lifestyle products. The
+portfolio demo is intentionally self-contained: it uses fictional products and
+simulated checkout, so it is safe to explore without credentials or payment data.
 
-The included demo inventory is fictional, US-based event content with USD pricing. It is designed as a high-end ticketing marketplace and remains ready to connect to the existing Django API.
+## Highlights
 
-## اجرا
+- 24 structured products across training, running, yoga, recovery, smart health and outdoor categories.
+- English, Persian (RTL), Turkish and Russian routes.
+- Search, filters, sort, wishlist, cart, product variants, demo checkout and account states.
+- Responsive UI, keyboard focus styles and reduced-motion support.
+- GitHub Pages-compatible routing, including direct links to internal pages.
+
+## Run locally
 
 ```bash
-cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-برای ساخت نسخهٔ production:
+Run quality checks before publishing:
 
 ```bash
+npm run lint
+npm run test
 npm run build
 ```
 
-## اتصال به API
+## Deploy
 
-یک فایل `.env.local` کنار `package.json` بسازید:
+Pushing to the default branch runs the repository's GitHub Pages workflow.
+In GitHub, open **Settings → Pages** and select **GitHub Actions** as the source;
+the site will then be published at `https://<github-user>.github.io/<repository>/`.
 
-```env
-VITE_API_URL=http://127.0.0.1:8011
-```
+For Vercel or Netlify, deploy this `frontend` directory with `npm run build` and
+leave `VITE_BASE_PATH` empty.
 
-Without this variable, the UI is explicitly in demo mode and uses the localized fictional US event inventory. With it configured, the events list and detail pages, authentication, reservations, payment redirect, and account order status use the Django API. An unavailable configured API shows an error state; it never silently switches back to fictional inventory.
+## Configuration
 
-In connected mode the full cart is submitted as one atomic order, discount codes are validated by the server, and the browser only marks a reservation successful after the API returns `paid` following the payment redirect. Favorites and display-only profile preferences remain scoped to the signed-in browser account because the API does not currently expose profile or favorites endpoints.
-
-If the connected API's numeric prices are not USD, set `VITE_CURRENCY` to its ISO-4217 code (for example, `IRR`). The same value is used for visible prices and the product-offer schema.
-
-## مسیرها
-
-- `/` صفحهٔ اصلی و کشف رویدادها
-- `/events` فیلتر، جست‌وجو، مرتب‌سازی و حالت‌های loading/empty/error
-- `/events/:slug` جزئیات رویداد، گالری، انتخاب نوع و تعداد بلیت و نظرات
-- `/checkout` سبد، کد تخفیف، فرم پرداخت و شمارش‌گر رزرو
-- `/login` ورود و ثبت‌نام
-- `/account` سفارش‌ها و اطلاعات حساب
-- `/favorites` علاقه‌مندی‌ها
-- `/about`، `/contact`، `/legal` و 404
-
-## ساختار
-
-- `src/components` اجزای قابل استفادهٔ layout، کارت رویداد، سبد و stateها
-- `src/context` سبد و علاقه‌مندی‌های local-first
-- `src/data` localized fictional US event inventory and category/city adapters
-- `src/lib/api.ts` لایهٔ یکپارچه‌سازی API با fallback دادهٔ نمونه
-- `src/pages` صفحات مستقل
-- `src/styles.css` design tokens و UI responsive
-
-## ملاحظات اتصال کامل
-
-`VITE_API_URL` must point to the public API address that the browser can reach (Docker defaults to port `8011`). The payment service must also be configured with the frontend base URL so its verified return route can return to `/checkout`.
+The demo needs no environment variables. `VITE_BASE_PATH` is set by the GitHub
+Pages workflow. The legacy Django API is retained at the repository root as a
+separate backend implementation sample; this storefront currently uses local,
+fictional catalog data.

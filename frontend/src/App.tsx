@@ -1,111 +1,24 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { BrowserRouter, Route, Routes, useLocation, useNavigate } from './router'
-import { CartDrawer } from './components/CartDrawer'
-import { Footer, Header, MobileBottomNav } from './components/Layout'
-import { useApp, AppProvider } from './context/AppContext'
-import { type Locale, LanguageProvider, useLanguage } from './i18n'
-import { AUTH_CHANGE_EVENT, hasAuthenticatedSession } from './lib/api'
-import { AccountPage } from './pages/AccountPage'
-import { AuthPage } from './pages/AuthPage'
-import { CheckoutPage } from './pages/CheckoutPage'
-import { EventDetailPage } from './pages/EventDetailPage'
-import { EventsPage } from './pages/EventsPage'
-import { FavoritesPage } from './pages/FavoritesPage'
-import { HomePage } from './pages/HomePage'
-import { AboutPage, ContactPage, LegalPage, NotFoundPage } from './pages/InfoPages'
+import { useEffect } from 'react'
+import { BrowserRouter, Route, Routes, useLocation, useParams } from './router'
+import { CartDrawer, Footer, Header } from './components/ShopUI'
+import { LanguageProvider, type Locale, useLanguage } from './i18n/sinshop'
+import { ShopProvider } from './context/ShopContext'
+import { AccountPage, AuthPage, CheckoutPage, HomePage, InfoPage, NotFound, ProductPage, ShopPage, StoryPage, WishlistPage } from './pages/StorePages'
+import type { Category } from './data/catalog'
 
-const routeTitles: Record<Locale, Record<string, string>> = {
-  en: { '/': 'Nexa | Find your next live moment', '/events': 'Events | Nexa', '/checkout': 'Secure checkout | Nexa', '/login': 'Sign in | Nexa', '/account': 'My account | Nexa', '/favorites': 'Saved events | Nexa', '/about': 'About Nexa', '/contact': 'Contact Nexa', '/legal': 'Terms & privacy | Nexa', detail: 'Event details | Nexa', fallback: 'Nexa | Live experiences, beautifully booked' },
-  fa: { '/': 'نکسا | لحظهٔ زندهٔ بعدی‌تان را پیدا کنید', '/events': 'رویدادها | نکسا', '/checkout': 'پرداخت امن | نکسا', '/login': 'ورود | نکسا', '/account': 'حساب من | نکسا', '/favorites': 'رویدادهای ذخیره‌شده | نکسا', '/about': 'دربارهٔ نکسا', '/contact': 'تماس با نکسا', '/legal': 'قوانین و حریم خصوصی | نکسا', detail: 'جزئیات رویداد | نکسا', fallback: 'نکسا | تجربه‌های زنده، رزروی بی‌دردسر' },
-  ru: { '/': 'Nexa | Найдите следующее живое впечатление', '/events': 'События | Nexa', '/checkout': 'Безопасная оплата | Nexa', '/login': 'Войти | Nexa', '/account': 'Мой аккаунт | Nexa', '/favorites': 'Сохранённые события | Nexa', '/about': 'О Nexa', '/contact': 'Контакты Nexa', '/legal': 'Условия и конфиденциальность | Nexa', detail: 'Детали события | Nexa', fallback: 'Nexa | Живые впечатления, красивое бронирование' },
-  tr: { '/': 'Nexa | Sıradaki canlı anınızı bulun', '/events': 'Etkinlikler | Nexa', '/checkout': 'Güvenli ödeme | Nexa', '/login': 'Giriş | Nexa', '/account': 'Hesabım | Nexa', '/favorites': 'Kaydedilenler | Nexa', '/about': 'Nexa hakkında', '/contact': 'Nexa ile iletişim', '/legal': 'Koşullar ve gizlilik | Nexa', detail: 'Etkinlik detayları | Nexa', fallback: 'Nexa | Canlı deneyimler, kusursuz rezervasyon' },
-}
-
-const protectedMessage: Record<Locale, string> = {
-  en: 'Taking you to secure sign in…',
-  fa: 'در حال انتقال به ورود امن…',
-  ru: 'Перенаправляем на безопасный вход…',
-  tr: 'Güvenli girişe yönlendiriliyorsunuz…',
-}
-
-const ScrollAndMeta = () => {
-  const { pathname } = useLocation()
-  const { locale } = useLanguage()
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
-    const titles = routeTitles[locale]
-    document.title = pathname.startsWith('/events/') ? titles.detail : (titles[pathname] ?? titles.fallback)
-  }, [locale, pathname])
-  return null
-}
-
-const Toast = () => {
-  const { toast } = useApp()
-  if (!toast) return null
-  return <div className={`toast toast--${toast.tone ?? 'success'}`} role="status">{toast.message}</div>
-}
-
-const ProtectedRoute = ({ children }: { children: ReactNode }) => {
-  const { pathname, search } = useLocation()
-  const navigate = useNavigate()
-  const { locale } = useLanguage()
-  const [authenticated, setAuthenticated] = useState(hasAuthenticatedSession)
-
-  useEffect(() => {
-    const syncAuthentication = () => setAuthenticated(hasAuthenticatedSession())
-    syncAuthentication()
-    window.addEventListener(AUTH_CHANGE_EVENT, syncAuthentication)
-    const timer = window.setInterval(syncAuthentication, 60_000)
-    return () => {
-      window.removeEventListener(AUTH_CHANGE_EVENT, syncAuthentication)
-      window.clearInterval(timer)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!authenticated) navigate(`/login?next=${encodeURIComponent(`${pathname}${search}`)}`, true)
-  }, [authenticated, navigate, pathname, search])
-
-  if (!authenticated) {
-    return <main className="route-guard" aria-live="polite"><span className="route-guard__spinner" /><p>{protectedMessage[locale]}</p></main>
-  }
-  return <>{children}</>
-}
-
-const AppShell = () => {
-  const { pathname } = useLocation()
-  const authMode = pathname === '/login'
-  return (
-    <>
-      <ScrollAndMeta />
-      {!authMode && <Header />}
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/events" element={<EventsPage />} />
-        <Route path="/events/:slug" element={<EventDetailPage />} />
-        <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
-        <Route path="/login" element={<AuthPage />} />
-        <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
-        <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/legal" element={<LegalPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-      {!authMode && <Footer />}
-      {!authMode && <MobileBottomNav />}
-      <CartDrawer />
-      <Toast />
-    </>
-  )
-}
-
-export const App = () => (
-  <LanguageProvider>
-    <AppProvider>
-      <BrowserRouter>
-        <AppShell />
-      </BrowserRouter>
-    </AppProvider>
-  </LanguageProvider>
-)
+const titles: Record<Locale, string> = { en: 'SinShop — Movement, considered.', fa: 'سین‌شاپ — حرکت، با دقت.', tr: 'SinShop — Hareket, özenle.', ru: 'SinShop — Движение, осмысленно.' }
+const Meta = () => { const { locale } = useLanguage(); const { pathname } = useLocation(); useEffect(() => { document.title = titles[locale]; window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); const description = 'SinShop — premium active lifestyle equipment for movement, recovery and wellbeing.'; let element = document.querySelector('meta[name="description"]'); if (!element) { element = document.createElement('meta'); element.setAttribute('name', 'description'); document.head.append(element) }; element.setAttribute('content', description); document.documentElement.style.colorScheme = 'light' }, [locale, pathname]); return null }
+const CategoryRoute = () => { const { category } = useParams<{ category: string }>(); return <ShopPage category={category as Category | undefined} /> }
+const Shell = () => <><Meta /><Header /><Routes>
+  <Route path="/" element={<HomePage />} /><Route path="/:locale" element={<HomePage />} />
+  <Route path="/shop" element={<ShopPage />} /><Route path="/:locale/shop" element={<ShopPage />} />
+  <Route path="/categories/:category" element={<CategoryRoute />} /><Route path="/:locale/categories/:category" element={<CategoryRoute />} />
+  <Route path="/product/:slug" element={<ProductPage />} /><Route path="/:locale/product/:slug" element={<ProductPage />} />
+  <Route path="/wishlist" element={<WishlistPage />} /><Route path="/:locale/wishlist" element={<WishlistPage />} />
+  <Route path="/checkout" element={<CheckoutPage />} /><Route path="/:locale/checkout" element={<CheckoutPage />} />
+  <Route path="/login" element={<AuthPage />} /><Route path="/:locale/login" element={<AuthPage />} /><Route path="/register" element={<AuthPage register />} /><Route path="/:locale/register" element={<AuthPage register />} /><Route path="/forgot" element={<InfoPage kind="faq" />} /><Route path="/:locale/forgot" element={<InfoPage kind="faq" />} />
+  <Route path="/account" element={<AccountPage />} /><Route path="/:locale/account" element={<AccountPage />} />
+  <Route path="/story" element={<StoryPage />} /><Route path="/:locale/story" element={<StoryPage />} />
+  <Route path="/contact" element={<InfoPage kind="contact" />} /><Route path="/:locale/contact" element={<InfoPage kind="contact" />} /><Route path="/shipping" element={<InfoPage kind="shipping" />} /><Route path="/:locale/shipping" element={<InfoPage kind="shipping" />} /><Route path="/legal" element={<InfoPage kind="legal" />} /><Route path="/:locale/legal" element={<InfoPage kind="legal" />} /><Route path="/faq" element={<InfoPage kind="faq" />} /><Route path="/:locale/faq" element={<InfoPage kind="faq" />} />
+  <Route path="*" element={<NotFound />} /></Routes><Footer /><CartDrawer /></>
+export const App = () => <LanguageProvider><ShopProvider><BrowserRouter><Shell /></BrowserRouter></ShopProvider></LanguageProvider>

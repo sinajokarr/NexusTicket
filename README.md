@@ -1,135 +1,231 @@
 # NexusTicket
 
-NexusTicket is a portfolio ticket-reservation application. It pairs a multilingual React storefront with a Django REST API for event discovery, JWT authentication, inventory-safe reservations, coupons, and a signed demo-payment flow.
+NexusTicket is a Django REST API for publishing events, reserving ticket inventory, and completing a signed demo-payment flow. The same repository also contains **SinShop**, a standalone React storefront used as an interactive portfolio demo for active-lifestyle products.
 
-> Status: portfolio-ready for local demonstration. See [the audit report](docs/AUDIT_REPORT.md) for verified results and known production limitations.
+The two applications are intentionally independent in the current version. SinShop uses fictional catalog data and browser storage; it does not call the Django API. The backend remains runnable and documented as a ticketing API sample.
 
-## What is included
+## Repository at a glance
 
-- React 19 + Vite storefront with English, Persian (RTL), Turkish, and Russian UI copy.
-- Django REST Framework API with OpenAPI/Swagger and ReDoc.
-- JWT registration, login, and refresh endpoints.
-- Atomic multi-ticket reservation, capacity checks, coupons, cancellation, and Celery-based expiry.
-- A signed, one-time demo-payment page for the local checkout flow; it is not a real payment provider.
-- Docker Compose development stack: Django, MySQL, Redis, and Celery.
+| Component | Purpose | Run location |
+| --- | --- | --- |
+| Django API | Event management, ticket reservations, orders, coupons, and demo payments | Repository root |
+| SinShop storefront | Multilingual product-browsing and simulated checkout experience | `frontend/` |
+| Docker Compose | Local MySQL, Redis, Django, and Celery environment for the API | Repository root |
+
+## Highlights
+
+### Django ticketing API
+
+- Email-based registration with JWT access and refresh endpoints.
+- Public browsing of active events, categories, ticket classes, and approved reviews.
+- Organizer and staff permissions for event and ticket-class management.
+- Event search, ordering, and filters for location, date range, active state, and ticket-price range.
+- Atomic, multi-line ticket reservations using database locks to protect ticket capacity and coupon usage.
+- Pending-order cancellation and a Celery task that releases a reservation after 15 minutes.
+- A signed, one-time demo-payment page. It models the handoff and settlement flow but is not a payment-provider integration.
+- OpenAPI schema, Swagger UI, ReDoc, a health endpoint, and a Django admin site.
+
+### SinShop storefront
+
+- A local catalog of 24 fictional active-lifestyle products across training, running, yoga, recovery, smart-health, and outdoor categories.
+- English, Persian (RTL), Turkish, and Russian interfaces, with locale-aware routes.
+- Product search, category browsing, sorting, availability and price filters, product variants, cart, and wishlist.
+- Simulated account and checkout screens; no actual account or payment data is submitted.
+- Cart, wishlist, and language preference stored only in the browser via `localStorage`.
+- A custom client-side router that supports GitHub Pages project paths and direct-link fallback deployment.
+
+## Technology
+
+| Area | Tools |
+| --- | --- |
+| API | Python, Django, Django REST Framework |
+| Authentication | Custom email user model, Simple JWT, Django sessions |
+| Data and async work | SQLite for local development; MySQL, Redis, and Celery in Docker |
+| API documentation | drf-spectacular, Swagger UI, ReDoc |
+| Storefront | React, TypeScript, Vite, Lucide React |
+| Testing | pytest-django, model-bakery, Vitest |
+| Automation | GitHub Actions |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Storefront[React + Vite storefront] -->|JWT / JSON API| API[Django REST Framework]
-  API --> DB[(SQLite locally / MySQL in Docker)]
-  API --> Redis[(Redis)]
-  Worker[Celery worker] --> Redis
-  Worker --> DB
+    subgraph Storefront[SinShop storefront]
+        Browser[Browser] --> React[React + TypeScript]
+        React --> Storage[Local browser storage]
+    end
+
+    subgraph Ticketing[NexusTicket API]
+        Client[API client] --> DRF[Django REST Framework]
+        DRF --> DB[(SQLite or MySQL)]
+        DRF --> Redis[Redis]
+        Celery[Celery reservation-expiry worker] --> Redis
+        Celery --> DB
+    end
 ```
 
-Detailed architecture and endpoint notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API_VERIFICATION.md](docs/API_VERIFICATION.md).
+The diagram shows the two executable parts of this repository, not a live integration between them. See [the architecture notes](docs/ARCHITECTURE.md) for implementation details and boundaries.
 
-## Prerequisites
+## Project structure
 
-- Python 3.11+ (the Docker image uses 3.11; the audit also passed on 3.13)
-- Node.js 20+
-- npm
-- Docker Desktop, only for the optional Compose stack
+```text
+.
+├── accounts/       email-based user registration
+├── config/         Django, Celery, URL, and runtime configuration
+├── events/         event, artist, category, ticket-class, and review API
+├── orders/         reservation, coupon, cancellation, and expiry logic
+├── payments/       signed demo-payment endpoints
+├── frontend/       SinShop React/Vite portfolio storefront
+├── docs/           architecture, API verification, and audit notes
+├── docker-compose.yml
+└── requirements.txt
+```
 
-## Local development
+## API overview
 
-Create a private environment file; do not commit it.
+The local Django server runs at `http://127.0.0.1:8000` by default. Docker exposes it at `http://127.0.0.1:8011` unless `NEXUSTICKET_PORT` is changed.
+
+| Area | Endpoint | Access |
+| --- | --- | --- |
+| Service health | `GET /health/` | Public |
+| Schema and UI | `GET /api/schema/`, `/api/docs/`, `/api/redoc/` | Public |
+| Authentication | `POST /api/auth/register/`, `/login/`, `/refresh/` | Public |
+| Events | `/api/events/list/`, `/categories/`, `/tickets/`, `/reviews/` | Read public; writes are permission-controlled |
+| Orders | `/api/orders/`, `/api/orders/{id}/cancel/` | Authenticated owner |
+| Payments | `/api/payments/request/`, `/mock-bank/{authority_id}/`, `/verify/{authority_id}/` | Owner or signed demo-payment session, as applicable |
+
+Example registration request:
 
 ```bash
-cp .env.example .env
+curl -X POST http://127.0.0.1:8000/api/auth/register/ \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","password":"A-strong-demo-password-123"}'
+```
+
+For the complete request and response shapes, start the API and open [Swagger UI](http://127.0.0.1:8000/api/docs/). The recorded backend verification matrix is in [docs/API_VERIFICATION.md](docs/API_VERIFICATION.md).
+
+## Run the Django API locally
+
+### Prerequisites
+
+- Python 3.11 or later
+- `pip`
+
+SQLite is the default local database. MySQL, Redis, and Celery are only required for the Docker stack or asynchronous reservation expiry.
+
+```bash
+git clone https://github.com/sinajokarr/NexusTicket.git
+cd NexusTicket
+
 python3 -m venv .venv
 source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+cp .env.example .env
+
 python manage.py migrate
-python manage.py createsuperuser
-```
-
-Start the API:
-
-```bash
 python manage.py runserver
 ```
 
-In a second terminal, start the storefront:
+The API will be available at `http://127.0.0.1:8000`. Create an administrator when needed:
+
+```bash
+python manage.py createsuperuser
+```
+
+### Configuration
+
+Copy `.env.example` to `.env` for local overrides. The most relevant variables are:
+
+| Variable | Purpose | Local default |
+| --- | --- | --- |
+| `DEBUG` | Enables Django development mode | `True` |
+| `SECRET_KEY` | Django signing key | Development-only placeholder in `.env.example` |
+| `DATABASE_URL` | Database connection string | SQLite `db.sqlite3` |
+| `CELERY_BROKER_URL` | Celery broker | In-memory broker |
+| `CELERY_RESULT_BACKEND` | Celery results backend | In-memory backend |
+| `FRONTEND_BASE_URL` | Return URL used by the demo-payment flow | `http://127.0.0.1:5173` |
+| `PAYMENT_PUBLIC_BASE_URL` | Public base URL for the demo-payment page | `http://127.0.0.1:8011` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated permitted browser origins | Vite local origin |
+
+Use a unique `SECRET_KEY` and explicit host/origin settings outside local development. The application rejects the built-in development fallback when `DEBUG=False`.
+
+## Run the frontend locally
+
+### Prerequisites
+
+- Node.js 20 or later
+- npm
 
 ```bash
 cd frontend
-cp .env.example .env.local
 npm ci
 npm run dev
 ```
 
-The storefront uses its disclosed fictional inventory when `VITE_API_URL` is empty. To use the local API, set this in `frontend/.env.local` and restart Vite:
+Vite prints the local URL, normally `http://127.0.0.1:5173`.
 
-```env
-VITE_API_URL=http://127.0.0.1:8000
-VITE_CURRENCY=USD
-```
+No environment variables are required for local storefront development. `VITE_BASE_PATH` is optional and is set by the GitHub Pages workflow to build the app beneath the repository path.
 
-The API does not ship with seeded public events. Create event records through `/admin/` after creating a superuser, or use the API as an authenticated organizer. This deliberate limitation avoids publishing a hard-coded account or misleading demo credentials.
+## Docker API environment
 
-## Docker development stack
-
-Copy the example configuration first, then start the services:
+Docker Compose starts MySQL, Redis, Django, and the Celery worker. The `web` service applies migrations before it starts Django’s development server.
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The API is available at `http://127.0.0.1:8011` unless `NEXUSTICKET_PORT` is changed. The compose file runs migrations on web-container startup. Create an administrator with:
+Open `http://127.0.0.1:8011/api/docs/` when the services are ready. To stop the stack:
 
 ```bash
-docker compose exec web python manage.py createsuperuser
+docker compose down
 ```
 
-Docker Compose is a local-development stack. It intentionally does not claim to be a complete production deployment; configure a production WSGI/ASGI server, static/media storage, hosts, TLS termination, and observability before deployment.
+To remove the local MySQL volume as well, use `docker compose down -v`. This deletes only the Compose-managed local database volume.
 
-## API quick reference
+## Verification
 
-- Health: `GET /health/`
-- Interactive documentation: `/api/docs/`
-- OpenAPI schema: `/api/schema/`
-- Authentication: `/api/auth/register/`, `/api/auth/login/`, `/api/auth/refresh/`
-- Events: `/api/events/list/`, `/api/events/categories/`, `/api/events/tickets/`, `/api/events/reviews/`
-- Reservations: `/api/orders/` and `/api/orders/{id}/cancel/`
-- Payments: `/api/payments/request/`, `/api/payments/mock-bank/{authority_id}/`, `/api/payments/verify/`
-
-Pass an access token as `Authorization: Bearer <access-token>` for protected endpoints. See [API verification](docs/API_VERIFICATION.md) for authentication, scenarios, and response behavior.
-
-## Quality checks
-
-From the repository root:
+Run the backend checks from the repository root:
 
 ```bash
-python3 manage.py check
-python3 manage.py makemigrations --check --dry-run
-python3 -m pytest -q
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python -m pytest -q
 ```
 
-From `frontend/`:
+Run the storefront checks from `frontend/`:
 
 ```bash
 npm run lint
+npm run test
 npm run build
-npm audit --omit=dev --audit-level=high
 ```
 
-## Security notes
+GitHub Actions includes a quality workflow for Django checks, migrations, backend tests, TypeScript checking, and a storefront build. The Pages workflow also runs the frontend unit tests before deploying the static storefront on pushes to `main`.
 
-- `.env`, local SQLite databases, and Python cache files are ignored and removed from the repository index by this audit.
-- If a secret was previously committed, removing the file does **not** erase Git history. Rotate affected keys and use GitHub secret scanning/history-rewrite guidance before making the repository public.
-- Production requires a unique `SECRET_KEY` when `DEBUG=False`, explicit `ALLOWED_HOSTS`, CORS origins, CSRF trusted origins, TLS, and secure storage for media.
-- JWTs are currently stored in browser local storage by the SPA. For a high-risk production application, move to a carefully designed secure-cookie/session model and add CSP plus rate limiting.
+## Data access and payment boundaries
 
-## Limitations and scope
+- Event edits and ticket-class management are limited to an event organizer or staff member.
+- Reviews are public only after approval; creating one requires a paid order for the related event.
+- Order list and detail queries are scoped to the authenticated owner.
+- Reservation, cancellation, expiry, coupon accounting, and payment settlement use transactions; reservation creation locks the affected rows.
+- CORS uses an explicit allow-list rather than wildcard origins.
+- The payment pages are a signed demo flow. They must be replaced with provider-side verification before handling real payments.
 
-- The demo payment page is intentionally simulated and must be replaced with a verified provider for real transactions.
-- The storefront’s four languages cover interface copy and fictional local inventory. Live API event content is source-language only; multilingual CMS/API fields are not implemented.
-- No public deployment configuration, error-reporting service, or frontend end-to-end test suite is included yet.
+## Deployment notes
+
+The `frontend` app can be published with the included GitHub Pages workflow. In the GitHub repository, set **Settings → Pages → Source** to **GitHub Actions**, then push to `main`.
+
+The Docker configuration is for local development, not a production deployment. It runs Django’s development server and does not include a reverse proxy, managed static/media storage, monitoring, rate limiting, or a real payment provider.
 
 ## License
 
-No license is currently declared. Choose a license only after confirming the intended reuse and commercial terms.
+No license file is included. Usage and redistribution terms have not been declared.
+
+## Suggested GitHub metadata
+
+- **Description:** Django ticket-reservation API with atomic inventory handling and a standalone React storefront demo.
+- **Topics:** `django`, `django-rest-framework`, `react`, `typescript`, `vite`, `celery`, `redis`, `mysql`, `rest-api`, `portfolio-project`

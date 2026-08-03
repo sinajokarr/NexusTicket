@@ -21,8 +21,19 @@ type RouteProps = { path: string; element: ReactNode }
 const RouterContext = createContext<RouterContextValue | null>(null)
 const RouteContext = createContext<RouteContextValue>({})
 
-const getLocation = (): LocationState => ({ pathname: window.location.pathname, search: window.location.search })
 const tidyPath = (value: string) => (value.replace(/\/$/, '') || '/')
+const basePath = tidyPath(import.meta.env.BASE_URL)
+const stripBasePath = (pathname: string) => {
+  if (basePath === '/') return tidyPath(pathname)
+  const withoutBase = pathname === basePath || pathname === `${basePath}/`
+    ? '/'
+    : pathname.startsWith(`${basePath}/`)
+      ? pathname.slice(basePath.length)
+      : pathname
+  return tidyPath(withoutBase)
+}
+const withBasePath = (pathname: string) => basePath === '/' ? pathname : `${basePath}${pathname === '/' ? '' : pathname}`
+const getLocation = (): LocationState => ({ pathname: stripBasePath(window.location.pathname), search: window.location.search })
 
 const matchRoute = (pattern: string, pathname: string): RouteContextValue | null => {
   if (pattern === '*') return {}
@@ -47,7 +58,7 @@ export const BrowserRouter = ({ children }: { children: ReactNode }) => {
       window.location.assign(to)
       return
     }
-    const next = `${url.pathname}${url.search}${url.hash}`
+    const next = `${withBasePath(url.pathname)}${url.search}${url.hash}`
     if (replace) window.history.replaceState({}, '', next)
     else window.history.pushState({}, '', next)
     setLocation(getLocation())
@@ -77,7 +88,8 @@ export const Link = ({ to, onClick, ...props }: AnchorHTMLAttributes<HTMLAnchorE
     event.preventDefault()
     navigate(to)
   }
-  return <a href={to} onClick={handleClick} {...props} />
+  const href = to.startsWith('/') ? withBasePath(to) : to
+  return <a href={href} onClick={handleClick} {...props} />
 }
 
 export const NavLink = ({ className, to, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }) => {

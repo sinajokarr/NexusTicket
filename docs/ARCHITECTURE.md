@@ -1,47 +1,49 @@
 # Architecture
 
-## System overview
+## Repository boundary
 
-NexusTicket is a two-application repository. `frontend/` is a browser-rendered React/Vite application. The repository root is a Django REST Framework API. They communicate through JSON over a configurable `VITE_API_URL` base URL.
+NexusTicket contains two independently executable applications:
+
+1. The repository root is a Django REST Framework API for ticketing workflows.
+2. `frontend/` is the SinShop React/Vite storefront portfolio demo.
+
+The current SinShop implementation is intentionally self-contained. It reads its fictional product catalog from `frontend/src/data/catalog.ts` and persists cart, wishlist, and language preference in browser storage. It does **not** call the Django API. The API and storefront should therefore be run and evaluated as separate application samples.
 
 ```mermaid
-flowchart TD
-  Browser[React storefront] -->|Bearer JWT| DRF[Django REST Framework]
-  DRF --> Auth[Custom email-based user model]
-  DRF --> Events[Events and ticket classes]
-  DRF --> Orders[Orders and coupons]
-  DRF --> Payments[Signed demo-payment flow]
-  Events --> Database[(SQLite or MySQL)]
-  Orders --> Database
-  Payments --> Database
-  Celery[Celery expiry worker] --> Redis[Redis broker/result backend]
-  Celery --> Database
+flowchart LR
+  subgraph Storefront[SinShop storefront]
+    Browser[Browser] --> React[React, TypeScript, custom client router]
+    React --> Storage[localStorage]
+  end
+
+  subgraph API[NexusTicket ticketing API]
+    Client[API client] --> DRF[Django REST Framework]
+    DRF --> Database[(SQLite locally or MySQL in Docker)]
+    DRF --> Redis[Redis broker / result backend]
+    Worker[Celery expiry worker] --> Redis
+    Worker --> Database
+  end
 ```
 
 ## Backend
 
-- Entry points: `manage.py`, `config/asgi.py`, and `config/wsgi.py`.
-- Configuration: `config/settings.py`, using `django-environ`. SQLite is the safe local default; Docker sets MySQL and Redis URLs.
-- API: DRF `ModelViewSet`s for events, ticket classes, categories, and reviews; a restricted order viewset; and explicit payment views.
-- Authentication: email-based custom user model and Simple JWT access/refresh tokens. Global default is `IsAuthenticatedOrReadOnly`.
-- Inventory: `OrderCreateSerializer` locks ticket classes and associated events in a transaction before reserving capacity. Cancellation/expiry also lock affected rows before restoring inventory.
-- Payments: the gateway is a signed, one-time demo flow. It must not be presented as a real acquirer integration.
+- **Entry points:** `manage.py`, `config/asgi.py`, and `config/wsgi.py`.
+- **Configuration:** `config/settings.py` uses `django-environ`. SQLite is the local default; Docker supplies MySQL and Redis connection URLs.
+- **Authentication:** `accounts.User` uses email as its login identifier. Django REST Framework accepts JWT bearer tokens and sessions; its default permission is `IsAuthenticatedOrReadOnly`.
+- **Events:** the `events` app exposes category, event, ticket-class, and review viewsets. Event queries use `select_related` and `prefetch_related`; searches, ordering, and filters are configured on the event viewset.
+- **Inventory:** order creation locks ticket classes and events within a transaction before it reserves capacity. Cancellation locks and restores the same inventory. Celery cancels pending orders after 15 minutes and releases their inventory.
+- **Payments:** the `payments` app provides a signed, single-use demo payment session. It is deliberately not a real payment-acquirer integration.
+- **Documentation:** the API exposes an OpenAPI schema at `/api/schema/`, Swagger UI at `/api/docs/`, and ReDoc at `/api/redoc/`.
 
 ## Frontend
 
-- Entry: `frontend/src/main.tsx`; routes are declared in `frontend/src/App.tsx` using the small in-repo client router.
-- API client: `frontend/src/lib/api.ts`; it normalizes DRF event payloads, adds Bearer tokens, and serializes token refreshes to avoid duplicate refresh requests.
-- UI state: `AppContext` stores cart and favorites per auth scope in local storage. The API remains the authority for final prices, capacity, coupons, orders, and payment state.
-- Internationalization: `LanguageProvider` contains English, Persian, Russian, and Turkish interface copy; it writes `lang` and `dir` to the document. Persian uses RTL. Live API event data itself has no translated fields.
-- Offline/demo behavior: with no `VITE_API_URL`, the UI deliberately uses explicitly documented fictional data and a local demo checkout. With an API URL configured, event, order, auth, and payment calls use the backend.
+- **Entry and routes:** `frontend/src/main.tsx` loads `App.tsx`, which declares locale-aware routes through the small in-repo router.
+- **Catalog and state:** 24 fictional products are stored in `data/catalog.ts`. `ShopContext` persists the cart and wishlist under `sinshop-cart` and `sinshop-wishlist`; `LanguageProvider` persists the locale under `sinshop-locale`.
+- **Internationalization:** English, Persian, Turkish, and Russian UI copy is defined locally. Persian changes the document direction to RTL.
+- **Deployment:** the Vite base path comes from `VITE_BASE_PATH`. The Pages workflow sets it for a project site and copies `index.html` to `404.html` to support direct links.
 
-## Deployment structure
+## Development deployment boundary
 
-`docker-compose.yml` is a local development orchestration file for MySQL, Redis, Django, and Celery. It is not a complete production deployment: it uses Django’s development server and has no reverse proxy, static/media storage service, or application monitoring. Production settings enforce a unique `SECRET_KEY` when `DEBUG=False`, HTTPS redirects by default, secure cookies, HSTS, `X-Frame-Options: DENY`, and a restrictive referrer policy.
+`docker-compose.yml` is a local development configuration for MySQL, Redis, Django, and Celery. It runs `python manage.py runserver`; it does not supply a reverse proxy, production static/media storage, monitoring, rate limiting, or a real payment provider.
 
-## Key decisions
-
-- Preserve stock at the API boundary with database locks rather than trusting cart values from the client.
-- Preserve legacy single-ticket order input while allowing atomic multi-line reservations.
-- Keep public event browsing unauthenticated while restricting organizers, reviews, orders, and payment initiation.
-- Keep no real secrets or demo credentials in source control.
+When `DEBUG=False`, Django requires a non-default `SECRET_KEY`, enables HTTPS redirects by default, sets secure cookies, and configures HSTS, `X-Frame-Options: DENY`, and a restrictive referrer policy. These controls do not make the development Compose stack a production deployment.
